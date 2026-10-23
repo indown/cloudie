@@ -24,6 +24,10 @@ Notes for anyone (human or agent) continuing this code base.
   duration confirmation; never "first result".
 - Some Subsonic-compatible proxies hang on suffix Range requests (`bytes=-N`); Windows Media Foundation uses
   explicit ranges, but keep this in mind if playback from a Navidrome source stalls.
+- WinUI compile gotchas met so far: `x:DataType` cannot name a nested type; a `Window` cannot use a converter inside
+  `x:Bind` (microsoft-ui-xaml #4966), so expose a `Visibility` property instead; a lambda whose single parameter is
+  named `_` turns `_ = SomeAsync()` into an assignment to that parameter (name it `sender`). Compile errors from CI
+  are listed in the job summary and in the check-run annotations (packed, since GitHub shows ten per step).
 - Settings, cookies and the log live in `%LOCALAPPDATA%\Cloudie` (`AppPaths`), not in ApplicationData, so the app
   runs unpackaged; `.github/workflows/build.yml` publishes unpackaged self-contained zips for x64 and ARM64 on every
   push and is the quickest way to compile the WinUI project without a Windows machine.
