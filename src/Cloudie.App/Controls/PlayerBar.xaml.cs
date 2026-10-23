@@ -29,6 +29,8 @@ public sealed partial class PlayerBar : UserControl, INotifyPropertyChanged
                 case nameof(PlayerService.RepeatMode): Raise(nameof(RepeatGlyph)); Raise(nameof(RepeatBrush)); break;
                 case nameof(PlayerService.UnblockSource):
                 case nameof(PlayerService.ServedQuality): Raise(nameof(SourceLabel)); break;
+                case nameof(PlayerService.IsFm):
+                case nameof(PlayerService.IsHeartMode): Raise(nameof(ModeLabel)); break;
             }
         };
     }
@@ -40,6 +42,7 @@ public sealed partial class PlayerBar : UserControl, INotifyPropertyChanged
     public Brush ShuffleBrush => Player.IsShuffled ? AccentBrush : SecondaryBrush;
     public Brush RepeatBrush => Player.RepeatMode == RepeatMode.Off ? SecondaryBrush : AccentBrush;
     public string? SourceLabel => Player.UnblockSource is { } source ? $"来自 {source}" : Player.ServedQuality is { } q ? q.ToUpperInvariant() : null;
+    public string? ModeLabel => Player.IsFm ? "私人 FM" : Player.IsHeartMode ? "心动模式" : null;
 
     public double VolumePercent
     {

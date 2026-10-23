@@ -165,4 +165,27 @@ public class NeteaseApiPlaylistAndFmTests
         Assert.Equal("new list", payload.RootElement.GetProperty("name").GetString());
         Assert.Equal(0, payload.RootElement.GetProperty("privacy").GetInt32());
     }
+
+    [Fact]
+    public async Task Heart_mode_sends_the_seed_and_the_liked_list_and_unwraps_song_info()
+    {
+        var handler = StubHandler.Json("""
+            {"code":200,"data":[
+              {"id":7,"songInfo":{"id":7,"name":"goes with it","ar":[{"id":1,"name":"x"}],"al":{"id":2,"name":"y"},"dt":200000},"recommended":true},
+              {"id":8,"songInfo":null}]}
+            """);
+        using var client = new NeteaseClient(handler: handler);
+
+        var tracks = await new NeteaseApi(client).GetHeartModeListAsync(186006, 2829816518);
+
+        var track = Assert.Single(tracks);
+        Assert.Equal(7, track.Id);
+        Assert.Equal("https://music.163.com/weapi/playmode/intelligence/list", handler.Requests.Single().RequestUri!.ToString());
+        using var payload = DecryptWeapi(handler.Bodies.Single());
+        Assert.Equal(186006, payload.RootElement.GetProperty("songId").GetInt64());
+        Assert.Equal("fromPlayOne", payload.RootElement.GetProperty("type").GetString());
+        Assert.Equal(2829816518, payload.RootElement.GetProperty("playlistId").GetInt64());
+        Assert.Equal(186006, payload.RootElement.GetProperty("startMusicId").GetInt64());
+        Assert.Equal(1, payload.RootElement.GetProperty("count").GetInt32());
+    }
 }

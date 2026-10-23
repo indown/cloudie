@@ -17,6 +17,7 @@ public sealed partial class TrackListPage : Page
         List.PlayNextRequested += row => ViewModel.PlayNextCommand.Execute(row);
         List.LikeRequested += row => ViewModel.ToggleLikeCommand.Execute(row);
         List.RemoveRequested += row => ViewModel.RemoveRowCommand.Execute(row);
+        List.HeartModeRequested += row => ViewModel.StartHeartModeFromCommand.Execute(row);
         List.NavigateRequested += request => Frame.Navigate(typeof(TrackListPage), request);
     }
 

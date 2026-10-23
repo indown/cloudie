@@ -12,12 +12,16 @@ namespace Cloudie.App.Controls;
 public sealed partial class TrackList : UserControl
 {
     private const string RemoveMenuText = "从歌单中移除";
+    private const string HeartModeMenuText = "心动模式";
 
     public static readonly DependencyProperty RowsProperty = DependencyProperty.Register(
         nameof(Rows), typeof(ObservableCollection<TrackRow>), typeof(TrackList), new PropertyMetadata(null));
 
     public static readonly DependencyProperty CanRemoveProperty = DependencyProperty.Register(
         nameof(CanRemove), typeof(bool), typeof(TrackList), new PropertyMetadata(false));
+
+    public static readonly DependencyProperty CanHeartModeProperty = DependencyProperty.Register(
+        nameof(CanHeartMode), typeof(bool), typeof(TrackList), new PropertyMetadata(false));
 
     public ObservableCollection<TrackRow>? Rows
     {
@@ -32,11 +36,19 @@ public sealed partial class TrackList : UserControl
         set => SetValue(CanRemoveProperty, value);
     }
 
+    /// <summary>True on "我喜欢的音乐", where 心动模式 can start from a row.</summary>
+    public bool CanHeartMode
+    {
+        get => (bool)GetValue(CanHeartModeProperty);
+        set => SetValue(CanHeartModeProperty, value);
+    }
+
     /// <summary>Raised when the user wants a row played (double-click, menu).</summary>
     public event Action<TrackRow>? PlayRequested;
     public event Action<TrackRow>? PlayNextRequested;
     public event Action<TrackRow>? LikeRequested;
     public event Action<TrackRow>? RemoveRequested;
+    public event Action<TrackRow>? HeartModeRequested;
     /// <summary>Raised from the context menu to open the row's artist or album page.</summary>
     public event Action<TrackListRequest>? NavigateRequested;
 
@@ -82,6 +94,11 @@ public sealed partial class TrackList : UserControl
         if (RowOf(sender) is { } row) RemoveRequested?.Invoke(row);
     }
 
+    private void HeartModeMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is { } row) HeartModeRequested?.Invoke(row);
+    }
+
     /// <summary>Fills the "添加到歌单" submenu with the account's playlists and shows "移除" only where allowed.</summary>
     private void RowMenu_Opening(object sender, object e)
     {
@@ -96,6 +113,9 @@ public sealed partial class TrackList : UserControl
                     break;
                 case MenuFlyoutItem { Text: RemoveMenuText } remove:
                     remove.Visibility = CanRemove ? Visibility.Visible : Visibility.Collapsed;
+                    break;
+                case MenuFlyoutItem { Text: HeartModeMenuText } heart:
+                    heart.Visibility = CanHeartMode ? Visibility.Visible : Visibility.Collapsed;
                     break;
             }
         }

@@ -95,6 +95,8 @@ public sealed partial class PlayerService : ObservableObject
     [ObservableProperty] public partial bool ShowNowPlaying { get; set; }
     /// <summary>私人 FM: the queue is NetEase's station and refills itself near its end.</summary>
     [ObservableProperty] public partial bool IsFm { get; private set; }
+    /// <summary>心动模式: a run of songs NetEase picked to go with one liked song; tops itself up like FM.</summary>
+    [ObservableProperty] public partial bool IsHeartMode { get; private set; }
 
     public double Volume
     {
@@ -118,6 +120,7 @@ public sealed partial class PlayerService : ObservableObject
     public Task PlayAsync(IEnumerable<Track> tracks, int index = 0, long sourceId = 0)
     {
         IsFm = false;
+        IsHeartMode = false;
         _sourceId = sourceId;
         Queue.Replace(tracks, index);
         IsShuffled = Queue.IsShuffled;
@@ -155,8 +158,8 @@ public sealed partial class PlayerService : ObservableObject
 
     public async Task NextAsync(bool manual = true)
     {
-        if (IsFm && Queue.CurrentIndex >= Queue.Count - 1) await FetchFmAsync();
-        if (!Queue.AdvanceToNext(manual || IsFm))
+        if ((IsFm || IsHeartMode) && Queue.CurrentIndex >= Queue.Count - 1) await TopUpAsync();
+        if (!Queue.AdvanceToNext(manual || IsFm || IsHeartMode))
         {
             _player.Pause();
             return;
@@ -239,7 +242,7 @@ public sealed partial class PlayerService : ObservableObject
             UpdateTransportMetadata(track);
             _log.Info($"now playing {track.Id} {track.Name} via {resolved.Value.Source ?? "netease"} ({resolved.Value.Quality})");
             _ = LoadLyricsAsync(track, generation, cts.Token);
-            if (IsFm && Queue.CurrentIndex >= Queue.Count - 1) _ = FetchFmAsync();
+            if ((IsFm || IsHeartMode) && Queue.CurrentIndex >= Queue.Count - 1) _ = TopUpAsync();
         }
         catch (OperationCanceledException)
         {
@@ -362,6 +365,7 @@ public sealed partial class PlayerService : ObservableObject
             return;
         }
         IsFm = true;
+        IsHeartMode = false;
         _sourceId = 0;
         Queue.SetShuffle(false);
         IsShuffled = false;
@@ -393,15 +397,65 @@ public sealed partial class PlayerService : ObservableObject
         }
     }
 
-    /// <summary>Appends the station's next songs; called when the current song is the last one.</summary>
-    private async Task FetchFmAsync()
+    // MARK: 心动模式
+
+    /// <summary>Starts 心动模式 from <paramref name="seed"/>: it plays first, NetEase's picks follow.</summary>
+    public async Task StartHeartModeAsync(Track seed)
+    {
+        if (_account.Favorites is not { } favorites)
+        {
+            StatusMessage = "心动模式需要登录";
+            return;
+        }
+        IReadOnlyList<Track> picks;
+        try
+        {
+            picks = await _api.GetHeartModeListAsync(seed.Id, favorites.Id);
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"heart mode {seed.Id}: {error.Message}");
+            StatusMessage = "心动模式获取失败：" + error.Message;
+            return;
+        }
+        var tracks = new List<Track> { seed };
+        tracks.AddRange(picks.Where(t => t.Id != seed.Id));
+        IsFm = false;
+        IsHeartMode = true;
+        _sourceId = favorites.Id;
+        Queue.SetShuffle(false);
+        IsShuffled = false;
+        Queue.Replace(tracks, 0);
+        OnPropertyChanged(nameof(Queue));
+        SaveQueue();
+        await PlayCurrentAsync();
+    }
+
+    /// <summary>
+    /// Appends the next songs of the current mode (the FM station, or 心动模式 picks seeded by the song
+    /// playing now); called when the current song is the last one.
+    /// </summary>
+    private async Task TopUpAsync()
     {
         if (_fetchingFm) return;
         _fetchingFm = true;
+        var mode = IsFm ? "私人 FM" : "心动模式";
         try
         {
-            var tracks = await _api.GetPersonalFmAsync();
-            if (!IsFm) return;
+            IReadOnlyList<Track> tracks;
+            if (IsFm)
+            {
+                tracks = await _api.GetPersonalFmAsync();
+            }
+            else if (IsHeartMode && CurrentTrack is { } seed && _account.Favorites is { } favorites)
+            {
+                tracks = await _api.GetHeartModeListAsync(seed.Id, favorites.Id);
+            }
+            else
+            {
+                return;
+            }
+            if (!IsFm && !IsHeartMode) return;
             var known = Queue.Items;
             var fresh = tracks.Where(t => known.All(q => q.Id != t.Id)).ToList();
             if (fresh.Count == 0) return;
@@ -411,8 +465,8 @@ public sealed partial class PlayerService : ObservableObject
         }
         catch (Exception error)
         {
-            _log.Warn($"fm: {error.Message}");
-            StatusMessage = "私人 FM 获取失败：" + error.Message;
+            _log.Warn($"{mode}: {error.Message}");
+            StatusMessage = $"{mode}获取失败：{error.Message}";
         }
         finally
         {
@@ -439,6 +493,7 @@ public sealed partial class PlayerService : ObservableObject
             RepeatMode = Queue.RepeatMode;
             _sourceId = snapshot.SourceId;
             IsFm = snapshot.IsFm;
+            IsHeartMode = snapshot.IsHeartMode;
             if (Queue.Current is not { } track) return;
             if (position is not null && position.TrackId != track.Id)
             {
@@ -463,7 +518,7 @@ public sealed partial class PlayerService : ObservableObject
     {
         try
         {
-            _store.SaveQueue(new PlaybackSnapshot(Queue.OrderedItems, Queue.PlayOrder, Queue.IsShuffled, Queue.RepeatMode, _sourceId, IsFm));
+            _store.SaveQueue(new PlaybackSnapshot(Queue.OrderedItems, Queue.PlayOrder, Queue.IsShuffled, Queue.RepeatMode, _sourceId, IsFm, IsHeartMode));
         }
         catch (Exception error)
         {

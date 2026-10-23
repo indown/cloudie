@@ -70,6 +70,8 @@ public sealed partial class TrackListViewModel : ObservableObject
     /// <summary>A playlist that is not the account's own, viewed while signed in.</summary>
     [ObservableProperty] public partial bool CanSubscribe { get; private set; }
     [ObservableProperty] public partial bool IsOwnPlaylist { get; private set; }
+    /// <summary>"我喜欢的音乐" while signed in: 心动模式 can start from any of its songs.</summary>
+    [ObservableProperty] public partial bool CanHeartMode { get; private set; }
     public string SubscribeLabel => IsSubscribed ? "已收藏" : "收藏歌单";
     public string SubscribeGlyph => IsSubscribed ? "" : "";
     private long _playlistId;
@@ -98,6 +100,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         IsOwnPlaylist = false;
         CanSubscribe = false;
         IsSubscribed = false;
+        CanHeartMode = false;
         try
         {
             switch (request.Kind)
@@ -140,6 +143,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         IsOwnPlaylist = _account.IsOwn(id);
         CanSubscribe = _account.IsLoggedIn && !IsOwnPlaylist;
         IsSubscribed = playlist.Subscribed || _account.IsSubscribed(id);
+        CanHeartMode = IsOwnPlaylist && playlist.SpecialType == 5;
         var tracks = playlist.Tracks;
         var privileges = detail.Privileges;
         // v6 returns the first thousand tracks inline; the rest come from song/detail in pages.
@@ -225,6 +229,14 @@ public sealed partial class TrackListViewModel : ObservableObject
     {
         if (row is not null) _player.PlayNext(row.Track);
     }
+
+    [RelayCommand]
+    private Task StartHeartMode() =>
+        _tracks.Count == 0 || !CanHeartMode ? Task.CompletedTask : _player.StartHeartModeAsync(_tracks[Random.Shared.Next(_tracks.Count)]);
+
+    [RelayCommand]
+    private Task StartHeartModeFrom(TrackRow? row) =>
+        row is null || !CanHeartMode ? Task.CompletedTask : _player.StartHeartModeAsync(row.Track);
 
     [RelayCommand]
     private async Task ToggleSubscribe()

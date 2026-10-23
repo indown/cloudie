@@ -11,7 +11,8 @@ public sealed record PlaybackSnapshot(
     bool IsShuffled,
     RepeatMode RepeatMode,
     long SourceId,
-    bool IsFm);
+    bool IsFm,
+    bool IsHeartMode = false);
 
 /// <summary>Where playback was: written often, so it lives apart from the (large) queue.</summary>
 public sealed record PlaybackPosition(long TrackId, int CurrentIndex, TimeSpan Position);
