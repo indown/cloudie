@@ -1,0 +1,69 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  core:
+    name: Core tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test tests/Cloudie.Core.Tests -c Release --nologo
+
+  app:
+    name: App (${{ matrix.arch }})
+    runs-on: windows-latest
+    needs: core
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish (unpackaged, self-contained)
+        run: >
+          dotnet publish src/Cloudie.App/Cloudie.App.csproj
+          -c Release -r win-${{ matrix.arch }} -p:Platform=${{ matrix.arch }}
+          -o out/Cloudie-win-${{ matrix.arch }}
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path out/Cloudie-win-${{ matrix.arch }}/* -DestinationPath Cloudie-win-${{ matrix.arch }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cloudie-win-${{ matrix.arch }}
+          path: Cloudie-win-${{ matrix.arch }}.zip
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: app
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Cloudie-win-*
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: Cloudie-win-*.zip
+          generate_release_notes: true

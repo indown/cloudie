@@ -1,5 +1,7 @@
 # Cloudie
 
+[![build](https://github.com/indown/cloudie/actions/workflows/build.yml/badge.svg)](https://github.com/indown/cloudie/actions/workflows/build.yml)
+
 一个 Windows 原生（WinUI 3）的网易云音乐第三方客户端：登录账号听自己的歌单，灰色歌曲自动从其他音源补上，海外也能直接播放。
 
 > 仅供学习交流使用。音乐版权归网易云音乐及各音源平台所有，请支持正版。
@@ -33,13 +35,19 @@ dotnet test tests/Cloudie.Core.Tests
 
 ### 应用（Windows）
 
-需要 Visual Studio 2026（或 2022 17.12+）并安装 **Windows App SDK / WinUI** 工作负载，以及 .NET 10 SDK。
+需要 .NET 10 SDK；用 Visual Studio 2026（或 2022 17.12+）打开 `Cloudie.slnx` 的话请安装 **Windows App SDK / WinUI** 工作负载。
 
 ```powershell
-dotnet build src/Cloudie.App -c Debug -p:Platform=x64
+# 非打包、自包含，产物在 out/ 下，解压即可运行
+dotnet publish src/Cloudie.App/Cloudie.App.csproj -c Release -r win-x64 -p:Platform=x64 -o out/Cloudie-win-x64
+
+# 需要 MSIX 包时
+dotnet build src/Cloudie.App -c Release -p:Platform=x64 -p:Packaged=true
 ```
 
-或在 Visual Studio 中打开 `Cloudie.slnx`，选择 x64，直接运行（会自动注册为 MSIX 开发部署）。首次打包发布需要自签一个证书（项目 → 发布 → 创建应用程序包）。
+GitHub Actions 会在每次推送后编译 x64 与 ARM64 的 zip（Actions 页面的 Artifacts），打 `v*` 标签时自动发布到 Releases。
+
+数据目录：`%LOCALAPPDATA%\Cloudie\`（`settings.json`、`cookies.json`、`cloudie.log`）。
 
 ## 设置项
 
@@ -50,7 +58,6 @@ dotnet build src/Cloudie.App -c Debug -p:Platform=x64
 | `unblock.enabled` / `unblock.sources` | 灰歌解锁总开关与启用的音源（`pyncmd,navidrome`） |
 | `unblock.navidrome.url` / `user` / `password` | Navidrome 服务器 |
 
-Cookie 存放在 `%LOCALAPPDATA%\Packages\Cloudie_*\LocalState\cookies.json`，日志在同目录 `cloudie.log`。
 
 ## 许可与致谢
 

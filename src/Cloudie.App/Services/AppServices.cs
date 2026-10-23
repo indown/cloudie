@@ -1,7 +1,6 @@
 using Cloudie.Core.Netease;
 using Cloudie.Core.Settings;
 using Cloudie.Core.Unblock;
-using Windows.Storage;
 
 namespace Cloudie.App.Services;
 
@@ -18,10 +17,10 @@ public sealed class AppServices
 
     public static AppServices Create()
     {
-        var log = new LogService();
-        var settings = new AppSettings(new LocalSettingsStore());
-        var cookiePath = Path.Combine(ApplicationData.Current.LocalFolder.Path, "cookies.json");
-        var client = new NeteaseClient(new JsonFileCookieStore(cookiePath)) { SpoofDomesticIp = settings.SpoofDomesticIp };
+        AppPaths.Ensure();
+        var log = new LogService(AppPaths.LogFile);
+        var settings = new AppSettings(new JsonFileSettingsStore(AppPaths.SettingsFile));
+        var client = new NeteaseClient(new JsonFileCookieStore(AppPaths.CookiesFile)) { SpoofDomesticIp = settings.SpoofDomesticIp };
         var api = new NeteaseApi(client);
         var sources = new List<IAudioSource>
         {

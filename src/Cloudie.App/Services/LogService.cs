@@ -1,12 +1,11 @@
 using System.Diagnostics;
-using Windows.Storage;
 
 namespace Cloudie.App.Services;
 
-/// <summary>Appends one line per event to %LOCALAPPDATA%\Packages\...\LocalState\cloudie.log and the debugger.</summary>
-public sealed class LogService
+/// <summary>Appends one line per event to the log file and the debugger.</summary>
+public sealed class LogService(string path)
 {
-    private readonly string _path = Path.Combine(ApplicationData.Current.LocalFolder.Path, "cloudie.log");
+    private readonly string _path = path;
     private readonly object _gate = new();
 
     public void Info(string message) => Write("INFO", message);
