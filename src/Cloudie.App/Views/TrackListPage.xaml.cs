@@ -1,4 +1,5 @@
 using Cloudie.App.ViewModels;
+using Cloudie.Core.Netease.Models;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 
@@ -15,11 +16,17 @@ public sealed partial class TrackListPage : Page
         List.PlayRequested += row => ViewModel.PlayRowCommand.Execute(row);
         List.PlayNextRequested += row => ViewModel.PlayNextCommand.Execute(row);
         List.LikeRequested += row => ViewModel.ToggleLikeCommand.Execute(row);
+        List.NavigateRequested += request => Frame.Navigate(typeof(TrackListPage), request);
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         if (e.Parameter is TrackListRequest request) await ViewModel.LoadAsync(request);
+    }
+
+    private void Album_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is AlbumSummary album) Frame.Navigate(typeof(TrackListPage), TrackListRequest.Album(album.Id, album.Name));
     }
 }

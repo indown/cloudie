@@ -65,6 +65,13 @@
                             <MenuFlyoutItem Text="喜欢 / 取消喜欢" Click="Like_Click" Tag="{x:Bind}">
                                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEB51;" /></MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem Text="查看歌手" Click="ArtistMenu_Click" Tag="{x:Bind}">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE77B;" /></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="查看专辑" Click="AlbumMenu_Click" Tag="{x:Bind}">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE93C;" /></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                         </MenuFlyout>
                     </Grid.ContextFlyout>
                 </Grid>

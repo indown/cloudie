@@ -1,6 +1,7 @@
 using Cloudie.Core.Netease;
 using Cloudie.Core.Settings;
 using Cloudie.Core.Unblock;
+using Cloudie.Core.Updates;
 
 namespace Cloudie.App.Services;
 
@@ -14,6 +15,7 @@ public sealed class AppServices
     public required AccountService Account { get; init; }
     public required PlayerService Player { get; init; }
     public required LogService Log { get; init; }
+    public required UpdateChecker Updates { get; init; }
 
     public static AppServices Create()
     {
@@ -39,7 +41,8 @@ public sealed class AppServices
             Unblock = unblock,
             Account = account,
             Player = player,
-            Log = log
+            Log = log,
+            Updates = new UpdateChecker()
         };
     }
 }
