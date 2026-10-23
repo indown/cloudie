@@ -66,6 +66,13 @@ public sealed partial class TrackListViewModel : ObservableObject
     public bool HasError => Error is { Length: > 0 };
     [ObservableProperty] public partial string Summary { get; private set; } = string.Empty;
     [ObservableProperty] public partial bool HasAlbums { get; private set; }
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(SubscribeLabel), nameof(SubscribeGlyph))] public partial bool IsSubscribed { get; private set; }
+    /// <summary>A playlist that is not the account's own, viewed while signed in.</summary>
+    [ObservableProperty] public partial bool CanSubscribe { get; private set; }
+    [ObservableProperty] public partial bool IsOwnPlaylist { get; private set; }
+    public string SubscribeLabel => IsSubscribed ? "已收藏" : "收藏歌单";
+    public string SubscribeGlyph => IsSubscribed ? "" : "";
+    private long _playlistId;
 
     public TrackListViewModel()
     {
@@ -87,6 +94,10 @@ public sealed partial class TrackListViewModel : ObservableObject
         _sourceId = request.Kind == TrackListKind.DailySongs ? 0 : request.Id;
         Albums.Clear();
         HasAlbums = false;
+        _playlistId = request.Kind == TrackListKind.Playlist ? request.Id : 0;
+        IsOwnPlaylist = false;
+        CanSubscribe = false;
+        IsSubscribed = false;
         try
         {
             switch (request.Kind)
@@ -126,6 +137,9 @@ public sealed partial class TrackListViewModel : ObservableObject
         Subtitle = playlist.Creator is { } creator ? $"{creator.Nickname} · {playlist.TrackCount} 首" : $"{playlist.TrackCount} 首";
         Description = playlist.Description;
         CoverUrl = playlist.CoverImgUrl;
+        IsOwnPlaylist = _account.IsOwn(id);
+        CanSubscribe = _account.IsLoggedIn && !IsOwnPlaylist;
+        IsSubscribed = playlist.Subscribed || _account.IsSubscribed(id);
         var tracks = playlist.Tracks;
         var privileges = detail.Privileges;
         // v6 returns the first thousand tracks inline; the rest come from song/detail in pages.
@@ -210,6 +224,41 @@ public sealed partial class TrackListViewModel : ObservableObject
     private void PlayNext(TrackRow? row)
     {
         if (row is not null) _player.PlayNext(row.Track);
+    }
+
+    [RelayCommand]
+    private async Task ToggleSubscribe()
+    {
+        if (_playlistId == 0 || !CanSubscribe) return;
+        try
+        {
+            await _account.SubscribePlaylistAsync(_playlistId, !IsSubscribed);
+            IsSubscribed = !IsSubscribed;
+            App.Services.Status.Show(IsSubscribed ? "已收藏到我的歌单" : "已取消收藏");
+        }
+        catch (Exception error)
+        {
+            App.Services.Status.Show("操作失败：" + error.Message);
+        }
+    }
+
+    [RelayCommand]
+    private async Task RemoveRow(TrackRow? row)
+    {
+        if (row is null || !IsOwnPlaylist) return;
+        try
+        {
+            await _account.RemoveFromPlaylistAsync(_playlistId, row.Track.Id);
+            Rows.Remove(row);
+            _tracks.RemoveAll(t => t.Id == row.Track.Id);
+            var total = TimeSpan.FromMilliseconds(_tracks.Sum(static t => (double)t.DurationMs));
+            Summary = $"{_tracks.Count} 首歌曲，{(int)total.TotalHours} 小时 {total.Minutes} 分钟";
+            App.Services.Status.Show($"已从歌单移除《{row.Track.Name}》");
+        }
+        catch (Exception error)
+        {
+            App.Services.Status.Show("移除失败：" + error.Message);
+        }
     }
 
     [RelayCommand]

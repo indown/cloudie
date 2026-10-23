@@ -12,6 +12,8 @@ public static class AppPaths
     public static string SettingsFile => Path.Combine(DataDirectory, "settings.json");
     public static string CookiesFile => Path.Combine(DataDirectory, "cookies.json");
     public static string LogFile => Path.Combine(DataDirectory, "cloudie.log");
+    public static string QueueFile => Path.Combine(DataDirectory, "queue.json");
+    public static string PositionFile => Path.Combine(DataDirectory, "playback.json");
 
     public static void Ensure() => Directory.CreateDirectory(DataDirectory);
 }

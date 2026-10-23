@@ -32,10 +32,15 @@ public sealed partial class PlayerService : ObservableObject
     private int _loadGeneration;
     private long _sourceId;
     private bool _playReported = true;
+    private readonly PlaybackStore _store;
+    private TimeSpan? _pendingSeek;
+    private DateTime _lastPositionSave;
+    private bool _fetchingFm;
 
-    public PlayerService(NeteaseApi api, UnblockService unblock, AppSettings settings, AccountService account, LogService log)
+    public PlayerService(NeteaseApi api, UnblockService unblock, AppSettings settings, AccountService account, LogService log, PlaybackStore store)
     {
         _api = api;
+        _store = store;
         _unblock = unblock;
         _settings = settings;
         _account = account;
@@ -44,6 +49,15 @@ public sealed partial class PlayerService : ObservableObject
         _player.AudioCategory = MediaPlayerAudioCategory.Media;
         _player.CommandManager.IsEnabled = false;
         _player.Volume = settings.Volume;
+        _player.MediaOpened += (_, _) =>
+        {
+            // A restored session resumes where it stopped; the seek has to wait until the media is open.
+            if (_pendingSeek is { } seek)
+            {
+                _pendingSeek = null;
+                _player.PlaybackSession.Position = seek;
+            }
+        };
         _player.MediaEnded += (_, _) => _dispatcher.TryEnqueue(() =>
         {
             ReportPlay(completed: true);
@@ -79,6 +93,8 @@ public sealed partial class PlayerService : ObservableObject
     [ObservableProperty] public partial bool IsShuffled { get; private set; }
     [ObservableProperty] public partial RepeatMode RepeatMode { get; private set; }
     [ObservableProperty] public partial bool ShowNowPlaying { get; set; }
+    /// <summary>私人 FM: the queue is NetEase's station and refills itself near its end.</summary>
+    [ObservableProperty] public partial bool IsFm { get; private set; }
 
     public double Volume
     {
@@ -101,10 +117,12 @@ public sealed partial class PlayerService : ObservableObject
     /// </summary>
     public Task PlayAsync(IEnumerable<Track> tracks, int index = 0, long sourceId = 0)
     {
+        IsFm = false;
         _sourceId = sourceId;
         Queue.Replace(tracks, index);
         IsShuffled = Queue.IsShuffled;
         OnPropertyChanged(nameof(Queue));
+        SaveQueue();
         return PlayCurrentAsync();
     }
 
@@ -118,24 +136,32 @@ public sealed partial class PlayerService : ObservableObject
     {
         Queue.InsertNext(track);
         OnPropertyChanged(nameof(Queue));
+        SaveQueue();
         if (CurrentTrack is null) _ = PlayCurrentAsync();
     }
 
     public void TogglePlayPause()
     {
         if (CurrentTrack is null) return;
+        if (_player.Source is null)
+        {
+            // Restored from the last session: nothing is loaded yet, so fetch the URL now and resume.
+            _ = PlayCurrentAsync(resumeAt: Position);
+            return;
+        }
         if (_player.PlaybackSession.PlaybackState == MediaPlaybackState.Playing) _player.Pause();
         else _player.Play();
     }
 
-    public Task NextAsync(bool manual = true)
+    public async Task NextAsync(bool manual = true)
     {
-        if (!Queue.AdvanceToNext(manual))
+        if (IsFm && Queue.CurrentIndex >= Queue.Count - 1) await FetchFmAsync();
+        if (!Queue.AdvanceToNext(manual || IsFm))
         {
             _player.Pause();
-            return Task.CompletedTask;
+            return;
         }
-        return PlayCurrentAsync();
+        await PlayCurrentAsync();
     }
 
     public Task PreviousAsync()
@@ -160,6 +186,7 @@ public sealed partial class PlayerService : ObservableObject
         Queue.SetShuffle(!Queue.IsShuffled);
         IsShuffled = Queue.IsShuffled;
         OnPropertyChanged(nameof(Queue));
+        SaveQueue();
     }
 
     public void CycleRepeatMode()
@@ -171,9 +198,10 @@ public sealed partial class PlayerService : ObservableObject
             _ => RepeatMode.Off
         };
         RepeatMode = Queue.RepeatMode;
+        SaveQueue();
     }
 
-    private async Task PlayCurrentAsync()
+    private async Task PlayCurrentAsync(TimeSpan? resumeAt = null)
     {
         var track = Queue.Current;
         if (track is null) return;
@@ -188,8 +216,9 @@ public sealed partial class PlayerService : ObservableObject
         ActiveLyricIndex = -1;
         UnblockSource = null;
         ServedQuality = null;
-        Position = TimeSpan.Zero;
+        Position = resumeAt ?? TimeSpan.Zero;
         Duration = track.Duration;
+        SavePosition();
         IsLoading = true;
         try
         {
@@ -204,11 +233,13 @@ public sealed partial class PlayerService : ObservableObject
             }
             UnblockSource = resolved.Value.Source;
             ServedQuality = resolved.Value.Quality;
+            _pendingSeek = resumeAt is { } seek && seek > TimeSpan.FromSeconds(1) ? seek : null;
             _player.Source = MediaSource.CreateFromUri(resolved.Value.Url);
             _player.Play();
             UpdateTransportMetadata(track);
             _log.Info($"now playing {track.Id} {track.Name} via {resolved.Value.Source ?? "netease"} ({resolved.Value.Quality})");
             _ = LoadLyricsAsync(track, generation, cts.Token);
+            if (IsFm && Queue.CurrentIndex >= Queue.Count - 1) _ = FetchFmAsync();
         }
         catch (OperationCanceledException)
         {
@@ -295,12 +326,164 @@ public sealed partial class PlayerService : ObservableObject
 
     private void Tick()
     {
-        if (CurrentTrack is null) return;
+        if (CurrentTrack is null || _player.Source is null) return;
         var session = _player.PlaybackSession;
         Position = session.Position;
         if (session.NaturalDuration > TimeSpan.Zero) Duration = session.NaturalDuration;
         var index = Lyrics.ActiveIndex(Position);
         if (index != ActiveLyricIndex) ActiveLyricIndex = index;
+        if (IsPlaying && DateTime.UtcNow - _lastPositionSave > TimeSpan.FromSeconds(10)) SavePosition();
+    }
+
+    // MARK: 私人 FM
+
+    /// <summary>Switches to 私人 FM, or resumes it when it is already the queue.</summary>
+    public async Task StartFmAsync()
+    {
+        if (IsFm && CurrentTrack is not null)
+        {
+            if (!IsPlaying) TogglePlayPause();
+            return;
+        }
+        IReadOnlyList<Track> tracks;
+        try
+        {
+            tracks = await _api.GetPersonalFmAsync();
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"fm: {error.Message}");
+            StatusMessage = "私人 FM 获取失败：" + error.Message;
+            return;
+        }
+        if (tracks.Count == 0)
+        {
+            StatusMessage = "私人 FM 暂时没有推荐";
+            return;
+        }
+        IsFm = true;
+        _sourceId = 0;
+        Queue.SetShuffle(false);
+        IsShuffled = false;
+        Queue.Replace(tracks, 0);
+        OnPropertyChanged(nameof(Queue));
+        SaveQueue();
+        await PlayCurrentAsync();
+    }
+
+    /// <summary>"不喜欢": tells NetEase, moves on, and drops the song from the queue.</summary>
+    public async Task TrashFmAsync()
+    {
+        if (!IsFm || CurrentTrack is not { } track) return;
+        try
+        {
+            await _api.TrashFmTrackAsync(track.Id);
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"fm trash {track.Id}: {error.Message}");
+        }
+        var index = Queue.CurrentIndex;
+        await NextAsync(manual: true);
+        if (index >= 0 && index < Queue.CurrentIndex)
+        {
+            Queue.RemoveAt(index);
+            OnPropertyChanged(nameof(Queue));
+            SaveQueue();
+        }
+    }
+
+    /// <summary>Appends the station's next songs; called when the current song is the last one.</summary>
+    private async Task FetchFmAsync()
+    {
+        if (_fetchingFm) return;
+        _fetchingFm = true;
+        try
+        {
+            var tracks = await _api.GetPersonalFmAsync();
+            if (!IsFm) return;
+            var known = Queue.Items;
+            var fresh = tracks.Where(t => known.All(q => q.Id != t.Id)).ToList();
+            if (fresh.Count == 0) return;
+            Queue.Append(fresh);
+            OnPropertyChanged(nameof(Queue));
+            SaveQueue();
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"fm: {error.Message}");
+            StatusMessage = "私人 FM 获取失败：" + error.Message;
+        }
+        finally
+        {
+            _fetchingFm = false;
+        }
+    }
+
+    // MARK: Persistence
+
+    /// <summary>
+    /// Puts the last session's queue back, paused on the song that was playing, with its position. The
+    /// URL is only fetched when the user presses play, so start-up makes no network call for this.
+    /// </summary>
+    public void RestoreQueue()
+    {
+        try
+        {
+            var snapshot = _store.LoadQueue();
+            if (snapshot is null || snapshot.Tracks.Count == 0) return;
+            var position = _store.LoadPosition();
+            Queue.Restore(snapshot.Tracks, snapshot.PlayOrder, position?.CurrentIndex ?? 0, snapshot.IsShuffled);
+            Queue.RepeatMode = snapshot.RepeatMode;
+            IsShuffled = Queue.IsShuffled;
+            RepeatMode = Queue.RepeatMode;
+            _sourceId = snapshot.SourceId;
+            IsFm = snapshot.IsFm;
+            if (Queue.Current is not { } track) return;
+            if (position is not null && position.TrackId != track.Id)
+            {
+                var byId = Queue.Items.ToList().FindIndex(t => t.Id == position.TrackId);
+                if (byId >= 0 && Queue.MoveTo(byId)) track = Queue.Current!;
+            }
+            CurrentTrack = track;
+            OnPropertyChanged(nameof(HasCurrentTrack));
+            OnPropertyChanged(nameof(Queue));
+            Duration = track.Duration;
+            Position = position is { } saved && saved.TrackId == track.Id && saved.Position < track.Duration ? saved.Position : TimeSpan.Zero;
+            UpdateTransportMetadata(track);
+            _log.Info($"restored queue: {Queue.Count} songs, at {track.Id} {track.Name} {Position:mm\\:ss}");
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"restore queue: {error.Message}");
+        }
+    }
+
+    private void SaveQueue()
+    {
+        try
+        {
+            _store.SaveQueue(new PlaybackSnapshot(Queue.OrderedItems, Queue.PlayOrder, Queue.IsShuffled, Queue.RepeatMode, _sourceId, IsFm));
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"save queue: {error.Message}");
+        }
+    }
+
+    /// <summary>Written on every track change, every ten seconds while playing, and when the window closes.</summary>
+    public void SavePosition()
+    {
+        if (CurrentTrack is not { } track) return;
+        try
+        {
+            _store.SavePosition(new PlaybackPosition(track.Id, Queue.CurrentIndex, Position));
+            _lastPositionSave = DateTime.UtcNow;
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"save position: {error.Message}");
+        }
     }
 
     private void ConfigureTransportControls()

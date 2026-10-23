@@ -17,7 +17,11 @@ public sealed partial class MainWindow : Window
 {
     public MainViewModel ViewModel { get; } = new();
 
+    private const int MinWidth = 960;
+    private const int MinHeight = 600;
+
     private readonly DispatcherQueueTimer _suggestTimer;
+    private readonly DispatcherQueueTimer _placementTimer;
     private CancellationTokenSource? _suggestCts;
 
     public MainWindow()
@@ -25,15 +29,69 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
-        AppWindow.Resize(new SizeInt32(1280, 820));
+        RestorePlacement();
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         _suggestTimer = DispatcherQueue.CreateTimer();
         _suggestTimer.Interval = TimeSpan.FromMilliseconds(250);
         _suggestTimer.IsRepeating = false;
         _suggestTimer.Tick += (_, _) => _ = LoadSuggestionsAsync();
+        _placementTimer = DispatcherQueue.CreateTimer();
+        _placementTimer.Interval = TimeSpan.FromMilliseconds(500);
+        _placementTimer.IsRepeating = false;
+        _placementTimer.Tick += (_, _) => RememberPlacement();
+        AppWindow.Changed += (_, args) =>
+        {
+            if (!args.DidSizeChange && !args.DidPositionChange) return;
+            _placementTimer.Stop();
+            _placementTimer.Start();
+        };
+        Closed += (_, _) =>
+        {
+            _placementTimer.Stop();
+            RememberPlacement();
+            ViewModel.Player.SavePosition();
+        };
         ViewModel.NavigateRequested += Navigate;
         ViewModel.Load();
         ContentFrame.Navigate(typeof(HomePage));
+    }
+
+    // MARK: Window placement
+
+    /// <summary>Last size and position, kept on a display that still exists; first run gets a sensible default.</summary>
+    private void RestorePlacement()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.PreferredMinimumWidth = MinWidth;
+            presenter.PreferredMinimumHeight = MinHeight;
+        }
+        var saved = App.Services.Settings.WindowPlacement;
+        if (saved is null)
+        {
+            AppWindow.Resize(new SizeInt32(1280, 820));
+            return;
+        }
+        var area = DisplayArea.GetFromRect(new RectInt32(saved.X, saved.Y, saved.Width, saved.Height), DisplayAreaFallback.Nearest).WorkArea;
+        var fit = saved.FitInto(area.X, area.Y, area.Width, area.Height, MinWidth, MinHeight);
+        AppWindow.MoveAndResize(new RectInt32(fit.X, fit.Y, fit.Width, fit.Height));
+        if (saved.IsMaximized && AppWindow.Presenter is OverlappedPresenter overlapped) overlapped.Maximize();
+    }
+
+    /// <summary>Stores the normal bounds; while maximized or minimized only the flag changes.</summary>
+    private void RememberPlacement()
+    {
+        var settings = App.Services.Settings;
+        var state = (AppWindow.Presenter as OverlappedPresenter)?.State ?? OverlappedPresenterState.Restored;
+        if (state != OverlappedPresenterState.Restored)
+        {
+            if (settings.WindowPlacement is { } previous) settings.WindowPlacement = previous with { IsMaximized = state == OverlappedPresenterState.Maximized };
+            return;
+        }
+        var position = AppWindow.Position;
+        var size = AppWindow.Size;
+        if (size.Width <= 0 || size.Height <= 0) return;
+        settings.WindowPlacement = new WindowPlacement(position.X, position.Y, size.Width, size.Height, IsMaximized: false);
     }
 
     public void ApplyTheme(AppTheme theme)
@@ -56,6 +114,7 @@ public sealed partial class MainWindow : Window
             NavigationKind.Home => typeof(HomePage),
             NavigationKind.DailySongs => typeof(TrackListPage),
             NavigationKind.Playlist => typeof(TrackListPage),
+            NavigationKind.Fm => typeof(FmPage),
             NavigationKind.Search => typeof(SearchPage),
             NavigationKind.Settings => typeof(SettingsPage),
             _ => typeof(HomePage)

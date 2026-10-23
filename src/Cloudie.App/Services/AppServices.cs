@@ -1,4 +1,5 @@
 using Cloudie.Core.Netease;
+using Cloudie.Core.Playback;
 using Cloudie.Core.Settings;
 using Cloudie.Core.Unblock;
 using Cloudie.Core.Updates;
@@ -16,6 +17,7 @@ public sealed class AppServices
     public required PlayerService Player { get; init; }
     public required LogService Log { get; init; }
     public required UpdateChecker Updates { get; init; }
+    public required StatusService Status { get; init; }
 
     public static AppServices Create()
     {
@@ -32,7 +34,7 @@ public sealed class AppServices
         var unblock = new UnblockService(sources, () => settings.UnblockEnabled ? settings.EnabledSources : new HashSet<string>());
         unblock.SourceFailed += (source, error) => log.Warn($"音源 {source.DisplayName} 失败: {error.Message}");
         var account = new AccountService(api, log);
-        var player = new PlayerService(api, unblock, settings, account, log);
+        var player = new PlayerService(api, unblock, settings, account, log, new PlaybackStore(AppPaths.QueueFile, AppPaths.PositionFile));
         return new AppServices
         {
             Settings = settings,
@@ -42,7 +44,8 @@ public sealed class AppServices
             Account = account,
             Player = player,
             Log = log,
-            Updates = new UpdateChecker()
+            Updates = new UpdateChecker(),
+            Status = new StatusService()
         };
     }
 }
