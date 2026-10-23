@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Cloudie.App.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+    xmlns:vm="using:Cloudie.App.ViewModels">
+
+    <ScrollViewer Padding="32,16,32,24">
+        <StackPanel Spacing="12" MaxWidth="900" HorizontalAlignment="Left">
+            <TextBlock Text="设置" Style="{StaticResource PageTitleStyle}" />
+
+            <TextBlock Text="账号" Style="{StaticResource SectionTitleStyle}" />
+            <toolkit:SettingsCard Header="{x:Bind ViewModel.AccountName, Mode=OneWay}" Description="网易云音乐账号">
+                <toolkit:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE77B;" />
+                </toolkit:SettingsCard.HeaderIcon>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="扫码登录" Click="Login_Click" Visibility="{x:Bind ViewModel.IsLoggedIn, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibility}}" />
+                    <Button Content="退出登录" Command="{x:Bind ViewModel.LogoutCommand}" Visibility="{x:Bind ViewModel.IsLoggedIn, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+            </toolkit:SettingsCard>
+
+            <TextBlock Text="播放" Style="{StaticResource SectionTitleStyle}" />
+            <toolkit:SettingsCard Header="音质" Description="无损与 Hi-Res 需要黑胶 VIP，未开通时自动回落到可用音质">
+                <toolkit:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8D6;" />
+                </toolkit:SettingsCard.HeaderIcon>
+                <ComboBox ItemsSource="{x:Bind ViewModel.Qualities}" SelectedItem="{x:Bind ViewModel.SelectedQuality, Mode=TwoWay}" MinWidth="140">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SettingsViewModel+QualityOption">
+                            <TextBlock Text="{x:Bind Name}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="海外解锁" Description="向网易接口附带国内 IP，海外网络下也能直接播放仅限国内的歌曲">
+                <toolkit:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE774;" />
+                </toolkit:SettingsCard.HeaderIcon>
+                <ToggleSwitch IsOn="{x:Bind ViewModel.SpoofDomesticIp, Mode=TwoWay}" OnContent="开" OffContent="关" />
+            </toolkit:SettingsCard>
+
+            <TextBlock Text="灰色歌曲解锁" Style="{StaticResource SectionTitleStyle}" />
+            <toolkit:SettingsExpander Header="灰色歌曲解锁" Description="无版权或下架歌曲将从已启用音源中匹配播放" IsExpanded="True">
+                <toolkit:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE785;" />
+                </toolkit:SettingsExpander.HeaderIcon>
+                <ToggleSwitch IsOn="{x:Bind ViewModel.UnblockEnabled, Mode=TwoWay}" OnContent="开" OffContent="关" />
+                <toolkit:SettingsExpander.Items>
+                    <toolkit:SettingsCard Header="pyncmd" Description="网易原始文件，适合只是锁区的歌">
+                        <ToggleSwitch IsOn="{x:Bind ViewModel.IsPyncmdEnabled, Mode=TwoWay}" OnContent="开" OffContent="关" />
+                    </toolkit:SettingsCard>
+                    <toolkit:SettingsCard Header="Navidrome" Description="自己的 Navidrome 或任何兼容 Subsonic API 的服务器，按歌名加歌手或时长严格匹配">
+                        <ToggleSwitch IsOn="{x:Bind ViewModel.IsNavidromeEnabled, Mode=TwoWay}" OnContent="开" OffContent="关" />
+                    </toolkit:SettingsCard>
+                    <toolkit:SettingsCard Header="Navidrome 服务器" Description="{x:Bind ViewModel.NavidromeStatus, Mode=OneWay}">
+                        <StackPanel Spacing="8" MinWidth="320">
+                            <TextBox PlaceholderText="https://music.example.com" Header="地址" Text="{x:Bind ViewModel.NavidromeUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Header="用户名" Text="{x:Bind ViewModel.NavidromeUser, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <PasswordBox Header="密码" Password="{x:Bind ViewModel.NavidromePassword, Mode=TwoWay}" />
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <Button Content="测试连接" Command="{x:Bind ViewModel.TestNavidromeCommand}" />
+                                <TextBlock Text="{x:Bind ViewModel.NavidromeTestResult, Mode=OneWay}" VerticalAlignment="Center" Style="{StaticResource SecondaryTextStyle}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+                </toolkit:SettingsExpander.Items>
+            </toolkit:SettingsExpander>
+
+            <TextBlock Text="外观" Style="{StaticResource SectionTitleStyle}" />
+            <toolkit:SettingsCard Header="主题">
+                <toolkit:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE790;" />
+                </toolkit:SettingsCard.HeaderIcon>
+                <ComboBox ItemsSource="{x:Bind ViewModel.Themes}" SelectedItem="{x:Bind ViewModel.SelectedTheme, Mode=TwoWay}" MinWidth="140">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SettingsViewModel+ThemeOption">
+                            <TextBlock Text="{x:Bind Name}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </toolkit:SettingsCard>
+
+            <TextBlock Text="关于" Style="{StaticResource SectionTitleStyle}" />
+            <toolkit:SettingsCard Header="Cloudie" Description="{x:Bind ViewModel.Version}">
+                <toolkit:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE946;" />
+                </toolkit:SettingsCard.HeaderIcon>
+                <TextBlock Text="仅供学习交流，音乐版权归网易云音乐及各音源平台所有" Style="{StaticResource SecondaryTextStyle}" />
+            </toolkit:SettingsCard>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

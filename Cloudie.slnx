@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Cloudie.App/Cloudie.App.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/Cloudie.Core/Cloudie.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Cloudie.Core.Tests/Cloudie.Core.Tests.csproj" />
+  </Folder>
+</Solution>

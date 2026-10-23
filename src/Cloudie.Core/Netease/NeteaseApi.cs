@@ -1,0 +1,154 @@
+using Cloudie.Core.Netease.Models;
+
+namespace Cloudie.Core.Netease;
+
+/// <summary>Typed NetEase Cloud Music API surface, mapped to the real weapi / eapi endpoints.</summary>
+public sealed class NeteaseApi(NeteaseClient client)
+{
+    public NeteaseClient Client { get; } = client;
+
+    private static Dictionary<string, object?> P(params (string Key, object? Value)[] pairs)
+    {
+        var dict = new Dictionary<string, object?>();
+        foreach (var (key, value) in pairs) dict[key] = value;
+        return dict;
+    }
+
+    private async Task<T> WeapiAsync<T>(string path, Dictionary<string, object?>? payload = null, CancellationToken ct = default) =>
+        NeteaseClient.Decode<T>(await Client.WeapiAsync(path, payload, cancellationToken: ct).ConfigureAwait(false));
+
+    private async Task<T> EapiAsync<T>(string path, Dictionary<string, object?>? payload = null, CancellationToken ct = default) =>
+        NeteaseClient.Decode<T>(await Client.EapiAsync(path, payload, cancellationToken: ct).ConfigureAwait(false));
+
+    // MARK: Auth
+
+    public async Task<string> GetQrKeyAsync(CancellationToken ct = default) =>
+        (await WeapiAsync<QrKeyResponse>("/login/qrcode/unikey", P(("type", 1)), ct).ConfigureAwait(false)).Unikey;
+
+    public static string QrLoginUrl(string unikey) => $"https://music.163.com/login?codekey={unikey}";
+
+    /// <summary>On 803 the auth cookies arrive via Set-Cookie and are absorbed by the client.</summary>
+    public async Task<QrCheckResponse> CheckQrAsync(string unikey, CancellationToken ct = default)
+    {
+        var json = await Client.WeapiAsync("/login/qrcode/client/login", P(("key", unikey), ("type", 1)), cancellationToken: ct)
+            .ConfigureAwait(false);
+        return System.Text.Json.JsonSerializer.Deserialize<QrCheckResponse>(json, NeteaseClient.ResponseOptions)
+               ?? throw new NeteaseApiException(-1, "数据加载失败");
+    }
+
+    public async Task LogoutAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var json = await Client.WeapiAsync("/logout", absorbCookies: false, cancellationToken: ct).ConfigureAwait(false);
+            NeteaseClient.Decode<CodeOnlyResponse>(json);
+        }
+        finally
+        {
+            Client.ClearAuthCookies();
+        }
+    }
+
+    public async Task RefreshLoginAsync(CancellationToken ct = default)
+    {
+        try { await Client.WeapiAsync("/login/token/refresh", cancellationToken: ct).ConfigureAwait(false); }
+        catch (NeteaseApiException) { }
+        catch (HttpRequestException) { }
+    }
+
+    public async Task<UserProfile?> GetAccountAsync(CancellationToken ct = default) =>
+        (await WeapiAsync<AccountResponse>("/w/nuser/account/get", ct: ct).ConfigureAwait(false)).Profile;
+
+    // MARK: Library
+
+    public async Task<IReadOnlyList<PlaylistSummary>> GetUserPlaylistsAsync(long uid, int limit = 2000, int offset = 0, CancellationToken ct = default) =>
+        (await WeapiAsync<UserPlaylistsResponse>("/user/playlist",
+            P(("uid", uid), ("limit", limit), ("offset", offset), ("includeVideo", true)), ct).ConfigureAwait(false)).Playlist;
+
+    public async Task<IReadOnlyList<long>> GetLikedTrackIdsAsync(long uid, CancellationToken ct = default) =>
+        (await WeapiAsync<LikeListResponse>("/song/like/get", P(("uid", uid)), ct).ConfigureAwait(false)).Ids;
+
+    public async Task LikeTrackAsync(long id, bool like, CancellationToken ct = default)
+    {
+        var response = await WeapiAsync<CodeOnlyResponse>($"/radio/like?alg=itembased&trackId={id}&time=3",
+            P(("trackId", id), ("like", like)), ct).ConfigureAwait(false);
+        if (response.Code != 200) throw new NeteaseApiException(response.Code, "操作失败，专辑下架或版权锁定");
+    }
+
+    // MARK: Discovery
+
+    public async Task<IReadOnlyList<PlaylistSummary>> GetPersonalizedPlaylistsAsync(int limit = 30, CancellationToken ct = default) =>
+        (await WeapiAsync<PersonalizedPlaylistsResponse>("/personalized/playlist",
+            P(("limit", limit), ("total", true), ("n", 1000)), ct).ConfigureAwait(false)).Result;
+
+    /// <summary>Logged-in daily recommended playlists.</summary>
+    public async Task<IReadOnlyList<PlaylistSummary>> GetRecommendResourceAsync(CancellationToken ct = default) =>
+        (await WeapiAsync<RecommendResourceResponse>("/v1/discovery/recommend/resource", ct: ct).ConfigureAwait(false)).Recommend;
+
+    public async Task<IReadOnlyList<Track>> GetDailyRecommendSongsAsync(CancellationToken ct = default) =>
+        (await WeapiAsync<RecommendSongsResponse>("/v3/discovery/recommend/songs", ct: ct).ConfigureAwait(false)).Data?.DailySongs ?? [];
+
+    public async Task<IReadOnlyList<ToplistItem>> GetToplistsAsync(CancellationToken ct = default) =>
+        (await EapiAsync<ToplistResponse>("/toplist", ct: ct).ConfigureAwait(false)).List;
+
+    public Task<TopPlaylistsResponse> GetTopPlaylistsAsync(string category = "全部", string order = "hot", int limit = 50, int offset = 0, CancellationToken ct = default) =>
+        WeapiAsync<TopPlaylistsResponse>("/playlist/list",
+            P(("cat", category), ("order", order), ("limit", limit), ("offset", offset), ("total", true)), ct);
+
+    // MARK: Playlists, albums, artists
+
+    public Task<PlaylistDetailResponse> GetPlaylistDetailAsync(long id, CancellationToken ct = default) =>
+        WeapiAsync<PlaylistDetailResponse>("/v6/playlist/detail", P(("id", id), ("n", 100_000), ("s", 8)), ct);
+
+    public async Task<SongDetailResponse> GetSongDetailsAsync(IEnumerable<long> ids, CancellationToken ct = default)
+    {
+        var list = ids.ToList();
+        if (list.Count == 0) return new SongDetailResponse();
+        var c = "[" + string.Join(",", list.Select(static id => $"{{\"id\":{id}}}")) + "]";
+        return await WeapiAsync<SongDetailResponse>("/v3/song/detail", P(("c", c)), ct).ConfigureAwait(false);
+    }
+
+    public Task<AlbumResponse> GetAlbumAsync(long id, CancellationToken ct = default) =>
+        WeapiAsync<AlbumResponse>($"/v1/album/{id}", ct: ct);
+
+    public Task<ArtistResponse> GetArtistAsync(long id, CancellationToken ct = default) =>
+        WeapiAsync<ArtistResponse>($"/v1/artist/{id}", ct: ct);
+
+    public Task<ArtistAlbumsResponse> GetArtistAlbumsAsync(long id, int limit = 50, int offset = 0, CancellationToken ct = default) =>
+        WeapiAsync<ArtistAlbumsResponse>($"/artist/albums/{id}", P(("limit", limit), ("offset", offset), ("total", true)), ct);
+
+    // MARK: Tracks
+
+    public async Task<IReadOnlyList<SongUrlData>> GetSongUrlsAsync(IEnumerable<long> ids, AudioQuality quality, CancellationToken ct = default)
+    {
+        var level = quality.ToLevel();
+        var payload = P(("ids", "[" + string.Join(",", ids) + "]"), ("level", level), ("encodeType", "flac"));
+        if (level == "sky") payload["immerseType"] = "c51";
+        return (await EapiAsync<SongUrlResponse>("/song/enhance/player/url/v1", payload, ct).ConfigureAwait(false)).Data;
+    }
+
+    public async Task<SongUrlData?> GetSongUrlAsync(long id, AudioQuality quality, CancellationToken ct = default) =>
+        (await GetSongUrlsAsync([id], quality, ct).ConfigureAwait(false)).FirstOrDefault(d => d.Id == id);
+
+    /// <summary><c>/song/lyric/v1</c> also returns verbatim (word-by-word) lyrics; falls back to the classic endpoint.</summary>
+    public async Task<LyricResponse> GetLyricAsync(long id, CancellationToken ct = default)
+    {
+        try
+        {
+            var v1 = await WeapiAsync<LyricResponse>("/song/lyric/v1",
+                P(("id", id), ("cp", false), ("lv", 0), ("kv", 0), ("tv", 0), ("rv", 0), ("yv", 0), ("ytv", 0), ("yrv", 0)), ct)
+                .ConfigureAwait(false);
+            if (v1.HasAnyLyric) return v1;
+        }
+        catch (NeteaseApiException) { }
+        return await WeapiAsync<LyricResponse>("/song/lyric", P(("id", id), ("lv", -1), ("kv", -1), ("tv", -1), ("rv", -1)), ct)
+            .ConfigureAwait(false);
+    }
+
+    // MARK: Search
+
+    public async Task<SearchResult> SearchAsync(string keywords, SearchType type = SearchType.Song, int limit = 30, int offset = 0, CancellationToken ct = default) =>
+        (await EapiAsync<SearchResponse>("/cloudsearch/pc",
+            P(("s", keywords), ("type", (int)type), ("limit", limit), ("offset", offset), ("total", true)), ct).ConfigureAwait(false)).Result
+        ?? new SearchResult();
+}
