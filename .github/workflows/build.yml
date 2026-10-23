@@ -37,10 +37,20 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Pick the version
+        id: version
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME -replace '^v', '' } else { "0.1.0-ci.$env:GITHUB_RUN_NUMBER" }
+          $sha = $env:GITHUB_SHA.Substring(0, 7)
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $version ($sha)"
       - name: Publish (unpackaged, self-contained)
         run: >
           dotnet publish src/Cloudie.App/Cloudie.App.csproj
           -c Release -r win-${{ matrix.arch }} -p:Platform=${{ matrix.arch }}
+          -p:Version=${{ steps.version.outputs.version }} -p:SourceRevisionId=${{ steps.version.outputs.sha }}
           -o out/Cloudie-win-${{ matrix.arch }}
           "-flp:ErrorsOnly;LogFile=build-errors.log"
       - name: Report every compiler error
