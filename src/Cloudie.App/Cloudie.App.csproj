@@ -12,13 +12,16 @@
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
-    <WindowsPackageType>MSIX</WindowsPackageType>
+    <!-- Unpackaged by default (zip that runs anywhere); pass -p:Packaged=true for an MSIX build. -->
+    <WindowsPackageType Condition="'$(Packaged)' != 'true'">None</WindowsPackageType>
+    <WindowsPackageType Condition="'$(Packaged)' == 'true'">MSIX</WindowsPackageType>
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>false</PublishTrimmed>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <DefaultLanguage>zh-Hans</DefaultLanguage>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-    <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
     <EnableWindowsTargeting Condition="!$([MSBuild]::IsOSPlatform('Windows'))">true</EnableWindowsTargeting>
   </PropertyGroup>
 

@@ -24,8 +24,9 @@ Notes for anyone (human or agent) continuing this code base.
   duration confirmation; never "first result".
 - Some Subsonic-compatible proxies hang on suffix Range requests (`bytes=-N`); Windows Media Foundation uses
   explicit ranges, but keep this in mind if playback from a Navidrome source stalls.
-- Settings live in `ApplicationData.Current.LocalSettings` through `LocalSettingsStore`; cookies in `cookies.json`
-  under `LocalState`.
+- Settings, cookies and the log live in `%LOCALAPPDATA%\Cloudie` (`AppPaths`), not in ApplicationData, so the app
+  runs unpackaged; `.github/workflows/build.yml` publishes unpackaged self-contained zips for x64 and ARM64 on every
+  push and is the quickest way to compile the WinUI project without a Windows machine.
 
 ## Conventions
 
