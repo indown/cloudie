@@ -56,6 +56,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    public bool Scrobble
+    {
+        get => _settings.Scrobble;
+        set { _settings.Scrobble = value; OnPropertyChanged(); }
+    }
+
+    public bool CheckUpdates
+    {
+        get => _settings.CheckUpdates;
+        set { _settings.CheckUpdates = value; OnPropertyChanged(); }
+    }
+
     public bool UnblockEnabled
     {
         get => _settings.UnblockEnabled;
@@ -96,9 +108,10 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public string AccountName => _account.Profile?.Nickname ?? "未登录";
     public bool IsLoggedIn => _account.IsLoggedIn;
-    public string Version => "0.1.0";
+    public string Version => AppInfo.VersionText;
 
     [ObservableProperty] public partial string? NavidromeTestResult { get; private set; }
+    [ObservableProperty] public partial string? UpdateResult { get; private set; }
 
     /// <summary>Re-reads the account after the login dialog closes.</summary>
     public void Refresh()
@@ -125,6 +138,27 @@ public sealed partial class SettingsViewModel : ObservableObject
         catch (Exception error)
         {
             NavidromeTestResult = "连接失败：" + error.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task CheckForUpdates()
+    {
+        UpdateResult = "正在检查…";
+        try
+        {
+            var release = await App.Services.Updates.CheckAsync(AppInfo.Version);
+            if (release is null)
+            {
+                UpdateResult = "已是最新版本";
+                return;
+            }
+            UpdateResult = $"有新版本 {release.Version}";
+            App.MainWindow?.ViewModel.OfferUpdate(release);
+        }
+        catch (Exception error)
+        {
+            UpdateResult = "检查失败：" + error.Message;
         }
     }
 

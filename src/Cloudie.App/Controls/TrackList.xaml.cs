@@ -22,6 +22,8 @@ public sealed partial class TrackList : UserControl
     public event Action<TrackRow>? PlayRequested;
     public event Action<TrackRow>? PlayNextRequested;
     public event Action<TrackRow>? LikeRequested;
+    /// <summary>Raised from the context menu to open the row's artist or album page.</summary>
+    public event Action<TrackListRequest>? NavigateRequested;
 
     public TrackList() => InitializeComponent();
 
@@ -37,16 +39,28 @@ public sealed partial class TrackList : UserControl
 
     private void PlayMenu_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.Tag is TrackRow row) PlayRequested?.Invoke(row);
+        if (RowOf(sender) is { } row) PlayRequested?.Invoke(row);
     }
 
     private void PlayNextMenu_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.Tag is TrackRow row) PlayNextRequested?.Invoke(row);
+        if (RowOf(sender) is { } row) PlayNextRequested?.Invoke(row);
     }
 
     private void Like_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.Tag is TrackRow row) LikeRequested?.Invoke(row);
+        if (RowOf(sender) is { } row) LikeRequested?.Invoke(row);
     }
+
+    private void ArtistMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is { } row && TrackListRequest.ForArtistOf(row.Track) is { } request) NavigateRequested?.Invoke(request);
+    }
+
+    private void AlbumMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is { } row && TrackListRequest.ForAlbumOf(row.Track) is { } request) NavigateRequested?.Invoke(request);
+    }
+
+    private static TrackRow? RowOf(object sender) => (sender as FrameworkElement)?.Tag as TrackRow;
 }

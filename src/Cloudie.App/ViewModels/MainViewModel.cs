@@ -2,12 +2,13 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Cloudie.App.Controls;
 using Cloudie.App.Services;
+using Cloudie.Core.Updates;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace Cloudie.App.ViewModels;
 
-/// <summary>Sidebar contents, account display and the status line shared by the window.</summary>
+/// <summary>Sidebar contents, account display, the status line and the update offer shared by the window.</summary>
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly AccountService _account = App.Services.Account;
@@ -19,6 +20,9 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial BitmapImage? AvatarImage { get; private set; }
     [ObservableProperty] public partial string? StatusMessage { get; private set; }
     [ObservableProperty] public partial bool IsStatusOpen { get; set; }
+    [ObservableProperty] public partial string? UpdateMessage { get; private set; }
+    [ObservableProperty] public partial Uri? UpdateUrl { get; private set; }
+    [ObservableProperty] public partial bool IsUpdateOpen { get; set; }
 
     /// <summary>A Window cannot use a converter in x:Bind (microsoft-ui-xaml #4966), so the flag is exposed as Visibility.</summary>
     public Visibility NowPlayingVisibility => Player.ShowNowPlaying ? Visibility.Visible : Visibility.Collapsed;
@@ -64,7 +68,7 @@ public sealed partial class MainViewModel : ObservableObject
                 MenuItems.Add(new NavigationEntry
                 {
                     Kind = NavigationKind.Playlist, Title = playlist.Name, Id = playlist.Id,
-                    Glyph = playlist.IsFavorites ? "" : ""
+                    Glyph = playlist.IsFavorites ? "" : ""
                 });
             }
         }
@@ -79,4 +83,24 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     public void Navigate(NavigationEntry entry) => NavigateRequested?.Invoke(entry);
+
+    /// <summary>Looks for a newer GitHub release; failures only go to the log.</summary>
+    public async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            if (await App.Services.Updates.CheckAsync(AppInfo.Version) is { } release) OfferUpdate(release);
+        }
+        catch (Exception error)
+        {
+            App.Services.Log.Warn($"update check: {error.Message}");
+        }
+    }
+
+    public void OfferUpdate(ReleaseInfo release)
+    {
+        UpdateMessage = $"Cloudie {release.Version} 已发布，当前 {AppInfo.VersionText}";
+        UpdateUrl = Uri.TryCreate(release.Url, UriKind.Absolute, out var url) ? url : null;
+        IsUpdateOpen = true;
+    }
 }

@@ -22,6 +22,7 @@ public sealed partial class SearchPage : Page, INotifyPropertyChanged
         List.PlayRequested += row => _ = ViewModel.PlayAsync(row);
         List.PlayNextRequested += row => App.Services.Player.PlayNext(row.Track);
         List.LikeRequested += row => _ = App.Services.Account.ToggleLikeAsync(row.Track.Id);
+        List.NavigateRequested += request => Frame.Navigate(typeof(TrackListPage), request);
         ViewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(SearchViewModel.IsLoading)) return;

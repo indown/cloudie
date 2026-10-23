@@ -16,6 +16,13 @@ public sealed record TrackListRequest(TrackListKind Kind, long Id, string? Title
     public static TrackListRequest Album(long id, string? title = null) => new(TrackListKind.Album, id, title);
     public static TrackListRequest Artist(long id, string? title = null) => new(TrackListKind.Artist, id, title);
     public static TrackListRequest DailySongs() => new(TrackListKind.DailySongs, 0, "每日推荐");
+
+    /// <summary>The page for the track's first artist, or null when NetEase lists none.</summary>
+    public static TrackListRequest? ForArtistOf(Track track) =>
+        track.Artists.FirstOrDefault() is { Id: > 0 } artist ? Artist(artist.Id, artist.Name) : null;
+
+    public static TrackListRequest? ForAlbumOf(Track track) =>
+        track.Album.Id > 0 ? Album(track.Album.Id, track.Album.Name) : null;
 }
 
 /// <summary>A song row as shown in lists: the track plus what the account may do with it.</summary>
@@ -44,8 +51,11 @@ public sealed partial class TrackListViewModel : ObservableObject
     private readonly PlayerService _player = App.Services.Player;
     private readonly LogService _log = App.Services.Log;
     private readonly List<Track> _tracks = [];
+    private long _sourceId;
 
     public ObservableCollection<TrackRow> Rows { get; } = [];
+    /// <summary>Artist pages also list the artist's albums.</summary>
+    public ObservableCollection<AlbumSummary> Albums { get; } = [];
 
     [ObservableProperty] public partial string Title { get; private set; } = string.Empty;
     [ObservableProperty] public partial string? Subtitle { get; private set; }
@@ -55,6 +65,7 @@ public sealed partial class TrackListViewModel : ObservableObject
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasError))] public partial string? Error { get; private set; }
     public bool HasError => Error is { Length: > 0 };
     [ObservableProperty] public partial string Summary { get; private set; } = string.Empty;
+    [ObservableProperty] public partial bool HasAlbums { get; private set; }
 
     public TrackListViewModel()
     {
@@ -73,6 +84,9 @@ public sealed partial class TrackListViewModel : ObservableObject
         IsLoading = true;
         Error = null;
         Title = request.Title ?? string.Empty;
+        _sourceId = request.Kind == TrackListKind.DailySongs ? 0 : request.Id;
+        Albums.Clear();
+        HasAlbums = false;
         try
         {
             switch (request.Kind)
@@ -150,6 +164,16 @@ public sealed partial class TrackListViewModel : ObservableObject
         Description = response.Artist?.BriefDesc;
         CoverUrl = response.Artist?.ImageUrl;
         SetTracks(response.HotSongs, null);
+        try
+        {
+            var albums = await _api.GetArtistAlbumsAsync(id, limit: 30);
+            foreach (var album in albums.HotAlbums) Albums.Add(album);
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"artist albums {id}: {error.Message}");
+        }
+        HasAlbums = Albums.Count > 0;
     }
 
     private void SetTracks(IReadOnlyList<Track> tracks, IReadOnlyList<TrackPrivilege>? privileges)
@@ -176,11 +200,11 @@ public sealed partial class TrackListViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task PlayAll() => _tracks.Count == 0 ? Task.CompletedTask : _player.PlayAsync(_tracks, 0);
+    private Task PlayAll() => _tracks.Count == 0 ? Task.CompletedTask : _player.PlayAsync(_tracks, 0, _sourceId);
 
     [RelayCommand]
     private Task PlayRow(TrackRow? row) =>
-        row is null ? Task.CompletedTask : _player.PlayAsync(_tracks, _tracks.FindIndex(t => t.Id == row.Track.Id));
+        row is null ? Task.CompletedTask : _player.PlayAsync(_tracks, _tracks.FindIndex(t => t.Id == row.Track.Id), _sourceId);
 
     [RelayCommand]
     private void PlayNext(TrackRow? row)

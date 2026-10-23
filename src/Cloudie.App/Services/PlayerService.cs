@@ -30,6 +30,8 @@ public sealed partial class PlayerService : ObservableObject
     private readonly DispatcherQueueTimer _ticker;
     private CancellationTokenSource? _loadCts;
     private int _loadGeneration;
+    private long _sourceId;
+    private bool _playReported = true;
 
     public PlayerService(NeteaseApi api, UnblockService unblock, AppSettings settings, AccountService account, LogService log)
     {
@@ -42,7 +44,11 @@ public sealed partial class PlayerService : ObservableObject
         _player.AudioCategory = MediaPlayerAudioCategory.Media;
         _player.CommandManager.IsEnabled = false;
         _player.Volume = settings.Volume;
-        _player.MediaEnded += (_, _) => _dispatcher.TryEnqueue(() => _ = NextAsync(manual: false));
+        _player.MediaEnded += (_, _) => _dispatcher.TryEnqueue(() =>
+        {
+            ReportPlay(completed: true);
+            _ = NextAsync(manual: false);
+        });
         _player.MediaFailed += (sender, e) => _dispatcher.TryEnqueue(() =>
         {
             _log.Error($"播放失败: {e.ErrorMessage}");
@@ -89,9 +95,13 @@ public sealed partial class PlayerService : ObservableObject
 
     public bool HasCurrentTrack => CurrentTrack is not null;
 
-    /// <summary>Replaces the queue with <paramref name="tracks"/> and plays the one at <paramref name="index"/>.</summary>
-    public Task PlayAsync(IEnumerable<Track> tracks, int index = 0)
+    /// <summary>
+    /// Replaces the queue with <paramref name="tracks"/> and plays the one at <paramref name="index"/>.
+    /// <paramref name="sourceId"/> is the playlist or album the songs came from; it is reported with the listening history.
+    /// </summary>
+    public Task PlayAsync(IEnumerable<Track> tracks, int index = 0, long sourceId = 0)
     {
+        _sourceId = sourceId;
         Queue.Replace(tracks, index);
         IsShuffled = Queue.IsShuffled;
         OnPropertyChanged(nameof(Queue));
@@ -170,7 +180,9 @@ public sealed partial class PlayerService : ObservableObject
         _loadCts?.Cancel();
         var cts = _loadCts = new CancellationTokenSource();
         var generation = ++_loadGeneration;
+        ReportPlay(completed: false);
         CurrentTrack = track;
+        _playReported = false;
         OnPropertyChanged(nameof(HasCurrentTrack));
         Lyrics = ParsedLyrics.Empty;
         ActiveLyricIndex = -1;
@@ -211,6 +223,33 @@ public sealed partial class PlayerService : ObservableObject
         {
             if (generation == _loadGeneration) IsLoading = false;
         }
+    }
+
+    /// <summary>
+    /// Sends the finished (or abandoned) track to NetEase's listening history, once per play. Nothing is
+    /// reported when signed out, when the setting is off, or when the song was skipped within its first second.
+    /// </summary>
+    private void ReportPlay(bool completed)
+    {
+        if (_playReported || CurrentTrack is not { } track) return;
+        _playReported = true;
+        if (!_settings.Scrobble || !_account.IsLoggedIn) return;
+        var heard = completed ? Duration : Position;
+        var seconds = (int)Math.Round(heard.TotalSeconds);
+        if (seconds < 1) return;
+        var sourceId = _sourceId;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _api.ScrobbleAsync(track.Id, seconds, sourceId);
+                _log.Info($"scrobbled {track.Id} {track.Name} ({seconds}s)");
+            }
+            catch (Exception error)
+            {
+                _log.Warn($"scrobble {track.Id}: {error.Message}");
+            }
+        });
     }
 
     /// <summary>NetEase first, in the chosen quality; refusals and trials fall through to the gray-track sources.</summary>

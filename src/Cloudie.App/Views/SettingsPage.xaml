@@ -41,6 +41,13 @@
                 <ToggleSwitch IsOn="{x:Bind ViewModel.SpoofDomesticIp, Mode=TwoWay}" OnContent="开" OffContent="关" />
             </toolkit:SettingsCard>
 
+            <toolkit:SettingsCard Header="同步听歌记录" Description="播放结束后上报给网易云音乐，计入听歌排行并影响每日推荐">
+                <toolkit:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE81C;" />
+                </toolkit:SettingsCard.HeaderIcon>
+                <ToggleSwitch IsOn="{x:Bind ViewModel.Scrobble, Mode=TwoWay}" OnContent="开" OffContent="关" />
+            </toolkit:SettingsCard>
+
             <TextBlock Text="灰色歌曲解锁" Style="{StaticResource SectionTitleStyle}" />
             <toolkit:SettingsExpander Header="灰色歌曲解锁" Description="无版权或下架歌曲将从已启用音源中匹配播放" IsExpanded="True">
                 <toolkit:SettingsExpander.HeaderIcon>
@@ -87,8 +94,18 @@
                 <toolkit:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE946;" />
                 </toolkit:SettingsCard.HeaderIcon>
-                <TextBlock Text="仅供学习交流，音乐版权归网易云音乐及各音源平台所有" Style="{StaticResource SecondaryTextStyle}" />
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="{x:Bind ViewModel.UpdateResult, Mode=OneWay}" VerticalAlignment="Center" Style="{StaticResource SecondaryTextStyle}" />
+                    <Button Content="检查更新" Command="{x:Bind ViewModel.CheckForUpdatesCommand}" />
+                </StackPanel>
             </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="启动时检查更新" Description="从 GitHub Releases 读取最新版本，有更新时在窗口顶部提示">
+                <toolkit:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE895;" />
+                </toolkit:SettingsCard.HeaderIcon>
+                <ToggleSwitch IsOn="{x:Bind ViewModel.CheckUpdates, Mode=TwoWay}" OnContent="开" OffContent="关" />
+            </toolkit:SettingsCard>
+            <TextBlock Text="仅供学习交流，音乐版权归网易云音乐及各音源平台所有" Style="{StaticResource SecondaryTextStyle}" Margin="0,4,0,0" />
         </StackPanel>
     </ScrollViewer>
 </Page>

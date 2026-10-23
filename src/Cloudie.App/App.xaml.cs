@@ -1,5 +1,4 @@
 using Cloudie.App.Services;
-using Cloudie.App.ViewModels;
 using Microsoft.UI.Xaml;
 
 namespace Cloudie.App;
@@ -24,10 +23,19 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        Services.Log.Info($"Cloudie {AppInfo.VersionText} starting");
         var theme = Services.Settings.Theme;
         MainWindow = new MainWindow();
         MainWindow.ApplyTheme(theme);
         MainWindow.Activate();
         _ = Services.Account.RestoreAsync();
+        if (Services.Settings.CheckUpdates) CheckForUpdatesLater(MainWindow);
+    }
+
+    /// <summary>A few seconds after launch, so the first screen is not competing with a network call.</summary>
+    private static async void CheckForUpdatesLater(MainWindow window)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(5));
+        await window.ViewModel.CheckForUpdatesAsync();
     }
 }
