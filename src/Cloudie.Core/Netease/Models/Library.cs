@@ -78,6 +78,7 @@ public sealed class AlbumSummary
 
     [JsonIgnore] public string ArtistName => Artist?.Name ?? Artists?.FirstOrDefault()?.Name ?? string.Empty;
     [JsonIgnore] public DateTimeOffset? PublishDate => PublishTime > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(PublishTime) : null;
+    [JsonIgnore] public string PublishYear => PublishDate?.Year.ToString() ?? string.Empty;
 }
 
 public sealed class ArtistSummary

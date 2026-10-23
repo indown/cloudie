@@ -123,3 +123,19 @@ public sealed class TopPlaylistsResponse
     [JsonPropertyName("total")] public int? Total { get; init; }
     [JsonPropertyName("more")] public bool? More { get; init; }
 }
+
+public sealed class SearchSuggestResponse
+{
+    public sealed class Body
+    {
+        [JsonPropertyName("allMatch")] public List<SuggestKeyword>? AllMatch { get; init; }
+    }
+
+    [JsonPropertyName("result")] public Body? Result { get; init; }
+}
+
+public sealed class SuggestKeyword
+{
+    [JsonPropertyName("keyword")] public string Keyword { get; init; } = string.Empty;
+    [JsonPropertyName("type")] public int Type { get; init; }
+}

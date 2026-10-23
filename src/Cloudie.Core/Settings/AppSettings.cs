@@ -21,6 +21,8 @@ public sealed class AppSettings(ISettingsStore store)
         public const string SubsonicUrl = "unblock.navidrome.url";
         public const string SubsonicUser = "unblock.navidrome.user";
         public const string SubsonicPassword = "unblock.navidrome.password";
+        public const string Scrobble = "playback.scrobble";
+        public const string CheckUpdates = "app.checkUpdates";
     }
 
     public static readonly IReadOnlyList<string> DefaultSourceOrder = [PyncmdAudioSource.SourceId, SubsonicAudioSource.SourceId];
@@ -48,6 +50,20 @@ public sealed class AppSettings(ISettingsStore store)
     {
         get => Store.GetBool(Keys.SpoofDomesticIp, true);
         set => Store.SetBool(Keys.SpoofDomesticIp, value);
+    }
+
+    /// <summary>Report plays to NetEase so they count toward listening history and recommendations.</summary>
+    public bool Scrobble
+    {
+        get => Store.GetBool(Keys.Scrobble, true);
+        set => Store.SetBool(Keys.Scrobble, value);
+    }
+
+    /// <summary>Look up the newest GitHub release at start-up and offer it in the status bar.</summary>
+    public bool CheckUpdates
+    {
+        get => Store.GetBool(Keys.CheckUpdates, true);
+        set => Store.SetBool(Keys.CheckUpdates, value);
     }
 
     public bool UnblockEnabled

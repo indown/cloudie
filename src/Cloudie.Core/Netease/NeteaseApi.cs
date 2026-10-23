@@ -151,4 +151,42 @@ public sealed class NeteaseApi(NeteaseClient client)
         (await EapiAsync<SearchResponse>("/cloudsearch/pc",
             P(("s", keywords), ("type", (int)type), ("limit", limit), ("offset", offset), ("total", true)), ct).ConfigureAwait(false)).Result
         ?? new SearchResult();
+
+    /// <summary>Keyword completions for the search box (<c>search/suggest/keyword</c>), in NetEase's order.</summary>
+    public async Task<IReadOnlyList<string>> GetSearchSuggestionsAsync(string keywords, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(keywords)) return [];
+        var response = await WeapiAsync<SearchSuggestResponse>("/search/suggest/keyword", P(("s", keywords.Trim())), ct).ConfigureAwait(false);
+        return response.Result?.AllMatch?
+            .Select(static match => match.Keyword)
+            .Where(static keyword => !string.IsNullOrWhiteSpace(keyword))
+            .Distinct()
+            .ToList() ?? [];
+    }
+
+    // MARK: Listening history
+
+    /// <summary>
+    /// Reports a play (<c>feedback/weblog</c>) so it counts toward listening history, play counts and
+    /// recommendations, like the official clients do. <paramref name="seconds"/> is how long the song was
+    /// heard; <paramref name="sourceId"/> is the playlist or album it was played from, 0 when unknown.
+    /// </summary>
+    public async Task ScrobbleAsync(long trackId, int seconds, long sourceId = 0, CancellationToken ct = default)
+    {
+        var play = new Dictionary<string, object?>
+        {
+            ["download"] = 0,
+            ["end"] = "playend",
+            ["id"] = trackId,
+            ["time"] = Math.Max(0, seconds),
+            ["type"] = "song",
+            ["wifi"] = 0,
+            ["source"] = "list",
+            ["mainsite"] = 1,
+            ["content"] = string.Empty
+        };
+        if (sourceId > 0) play["sourceId"] = sourceId.ToString();
+        var logs = System.Text.Json.JsonSerializer.Serialize(new[] { new Dictionary<string, object?> { ["action"] = "play", ["json"] = play } });
+        await WeapiAsync<CodeOnlyResponse>("/feedback/weblog", P(("logs", logs)), ct).ConfigureAwait(false);
+    }
 }
