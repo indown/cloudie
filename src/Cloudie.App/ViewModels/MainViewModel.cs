@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Cloudie.App.Controls;
 using Cloudie.App.Services;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace Cloudie.App.ViewModels;
@@ -19,6 +20,9 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial string? StatusMessage { get; private set; }
     [ObservableProperty] public partial bool IsStatusOpen { get; set; }
 
+    /// <summary>A Window cannot use a converter in x:Bind (microsoft-ui-xaml #4966), so the flag is exposed as Visibility.</summary>
+    public Visibility NowPlayingVisibility => Player.ShowNowPlaying ? Visibility.Visible : Visibility.Collapsed;
+
     public event Action<NavigationEntry>? NavigateRequested;
 
     public void Load()
@@ -30,6 +34,7 @@ public sealed partial class MainViewModel : ObservableObject
         };
         Player.PropertyChanged += (_, e) =>
         {
+            if (e.PropertyName == nameof(PlayerService.ShowNowPlaying)) OnPropertyChanged(nameof(NowPlayingVisibility));
             if (e.PropertyName == nameof(PlayerService.StatusMessage) && Player.StatusMessage is { Length: > 0 } message)
             {
                 StatusMessage = message;

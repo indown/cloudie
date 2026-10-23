@@ -74,7 +74,7 @@
 
         <!-- Immersive now-playing page slides over the browse UI, below the player bar. -->
         <controls:NowPlayingView x:Name="NowPlaying" Grid.Row="0" Margin="0,0,0,0"
-                                 Visibility="{x:Bind ViewModel.Player.ShowNowPlaying, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                                 Visibility="{x:Bind ViewModel.NowPlayingVisibility, Mode=OneWay}" />
 
         <controls:PlayerBar Grid.Row="1" />
 

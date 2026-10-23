@@ -7,13 +7,13 @@ using Cloudie.Core.Unblock;
 
 namespace Cloudie.App.ViewModels;
 
+public sealed record QualityOption(AudioQuality Value, string Name);
+public sealed record ThemeOption(AppTheme Value, string Name);
+
 public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly AppSettings _settings = App.Services.Settings;
     private readonly AccountService _account = App.Services.Account;
-
-    public sealed record QualityOption(AudioQuality Value, string Name);
-    public sealed record ThemeOption(AppTheme Value, string Name);
 
     public IReadOnlyList<QualityOption> Qualities { get; } =
         new[] { AudioQuality.Standard, AudioQuality.ExHigh, AudioQuality.Lossless, AudioQuality.HiRes }
