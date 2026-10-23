@@ -188,4 +188,24 @@ public class NeteaseApiPlaylistAndFmTests
         Assert.Equal(186006, payload.RootElement.GetProperty("startMusicId").GetInt64());
         Assert.Equal(1, payload.RootElement.GetProperty("count").GetInt32());
     }
+
+    [Fact]
+    public async Task Rename_and_delete_use_the_update_name_and_remove_endpoints()
+    {
+        var handler = StubHandler.Json("""{"code":200}""");
+        using var client = new NeteaseClient(handler: handler);
+        var api = new NeteaseApi(client);
+
+        await api.RenamePlaylistAsync(42, "周末");
+        await api.DeletePlaylistAsync(42);
+
+        Assert.Equal(
+            ["https://music.163.com/weapi/playlist/update/name", "https://music.163.com/weapi/playlist/remove"],
+            handler.Requests.Select(r => r.RequestUri!.ToString()));
+        using var rename = DecryptWeapi(handler.Bodies[0]);
+        Assert.Equal(42, rename.RootElement.GetProperty("id").GetInt64());
+        Assert.Equal("周末", rename.RootElement.GetProperty("name").GetString());
+        using var delete = DecryptWeapi(handler.Bodies[1]);
+        Assert.Equal("[42]", delete.RootElement.GetProperty("ids").GetString());
+    }
 }

@@ -72,6 +72,9 @@ public sealed partial class TrackListViewModel : ObservableObject
     [ObservableProperty] public partial bool IsOwnPlaylist { get; private set; }
     /// <summary>"我喜欢的音乐" while signed in: 心动模式 can start from any of its songs.</summary>
     [ObservableProperty] public partial bool CanHeartMode { get; private set; }
+    /// <summary>One of the account's own playlists other than "我喜欢的音乐": it can be renamed or deleted.</summary>
+    [ObservableProperty] public partial bool CanEditPlaylist { get; private set; }
+    public long PlaylistId => _playlistId;
     public string SubscribeLabel => IsSubscribed ? "已收藏" : "收藏歌单";
     public string SubscribeGlyph => IsSubscribed ? "" : "";
     private long _playlistId;
@@ -101,6 +104,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         CanSubscribe = false;
         IsSubscribed = false;
         CanHeartMode = false;
+        CanEditPlaylist = false;
         try
         {
             switch (request.Kind)
@@ -144,6 +148,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         CanSubscribe = _account.IsLoggedIn && !IsOwnPlaylist;
         IsSubscribed = playlist.Subscribed || _account.IsSubscribed(id);
         CanHeartMode = IsOwnPlaylist && playlist.SpecialType == 5;
+        CanEditPlaylist = IsOwnPlaylist && playlist.SpecialType != 5;
         var tracks = playlist.Tracks;
         var privileges = detail.Privileges;
         // v6 returns the first thousand tracks inline; the rest come from song/detail in pages.
@@ -229,6 +234,9 @@ public sealed partial class TrackListViewModel : ObservableObject
     {
         if (row is not null) _player.PlayNext(row.Track);
     }
+
+    /// <summary>After a rename elsewhere in the window.</summary>
+    public void ApplyName(string name) => Title = name;
 
     [RelayCommand]
     private Task StartHeartMode() =>

@@ -206,6 +206,13 @@ public sealed class NeteaseApi(NeteaseClient client)
         (await WeapiAsync<CreatePlaylistResponse>("/playlist/create",
             P(("name", name), ("privacy", isPrivate ? 10 : 0), ("type", "NORMAL")), ct).ConfigureAwait(false)).Playlist;
 
+    public async Task RenamePlaylistAsync(long id, string name, CancellationToken ct = default) =>
+        await WeapiAsync<CodeOnlyResponse>("/playlist/update/name", P(("id", id), ("name", name)), ct).ConfigureAwait(false);
+
+    /// <summary>Deletes one of the account's own playlists (<c>playlist/remove</c> takes a JSON array of ids).</summary>
+    public async Task DeletePlaylistAsync(long id, CancellationToken ct = default) =>
+        await WeapiAsync<CodeOnlyResponse>("/playlist/remove", P(("ids", $"[{id}]")), ct).ConfigureAwait(false);
+
     // MARK: Listening history
 
     /// <summary>
