@@ -42,6 +42,11 @@ jobs:
           dotnet publish src/Cloudie.App/Cloudie.App.csproj
           -c Release -r win-${{ matrix.arch }} -p:Platform=${{ matrix.arch }}
           -o out/Cloudie-win-${{ matrix.arch }}
+          "-flp:ErrorsOnly;LogFile=build-errors.log"
+      - name: Report every compiler error
+        if: failure()
+        shell: pwsh
+        run: ./.github/scripts/report-build-errors.ps1 build-errors.log
       - name: Zip
         shell: pwsh
         run: Compress-Archive -Path out/Cloudie-win-${{ matrix.arch }}/* -DestinationPath Cloudie-win-${{ matrix.arch }}.zip

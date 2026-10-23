@@ -28,7 +28,7 @@
                 </toolkit:SettingsCard.HeaderIcon>
                 <ComboBox ItemsSource="{x:Bind ViewModel.Qualities}" SelectedItem="{x:Bind ViewModel.SelectedQuality, Mode=TwoWay}" MinWidth="140">
                     <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:SettingsViewModel+QualityOption">
+                        <DataTemplate x:DataType="vm:QualityOption">
                             <TextBlock Text="{x:Bind Name}" />
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
@@ -75,7 +75,7 @@
                 </toolkit:SettingsCard.HeaderIcon>
                 <ComboBox ItemsSource="{x:Bind ViewModel.Themes}" SelectedItem="{x:Bind ViewModel.SelectedTheme, Mode=TwoWay}" MinWidth="140">
                     <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:SettingsViewModel+ThemeOption">
+                        <DataTemplate x:DataType="vm:ThemeOption">
                             <TextBlock Text="{x:Bind Name}" />
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
