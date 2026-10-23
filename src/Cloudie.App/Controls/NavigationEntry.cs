@@ -3,7 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace Cloudie.App.Controls;
 
-public enum NavigationKind { Header, Separator, Home, DailySongs, Playlist, Search, Settings }
+public enum NavigationKind { Header, Separator, Home, DailySongs, Fm, Playlist, Search, Settings }
 
 /// <summary>One row of the sidebar: a fixed destination, a header, or one of the account's playlists.</summary>
 public sealed class NavigationEntry

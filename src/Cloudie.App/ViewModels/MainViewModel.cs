@@ -32,6 +32,7 @@ public sealed partial class MainViewModel : ObservableObject
     public void Load()
     {
         RebuildMenu();
+        App.Services.Status.Shown += ShowStatus;
         _account.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(AccountService.Profile) or nameof(AccountService.Playlists)) RebuildMenu();
@@ -57,6 +58,7 @@ public sealed partial class MainViewModel : ObservableObject
         AccountName = profile?.Nickname ?? "未登录";
         AvatarImage = profile?.AvatarUrl is { } avatar ? new BitmapImage(new Uri(avatar + "?param=64y64")) : null;
         if (profile is null) return;
+        MenuItems.Add(new NavigationEntry { Kind = NavigationKind.Fm, Title = "私人 FM", Glyph = "" });
         var playlists = _account.Playlists;
         var mine = playlists.Where(p => p.Creator?.UserId == profile.UserId).ToList();
         var subscribed = playlists.Where(p => p.Creator?.UserId != profile.UserId).ToList();
@@ -83,6 +85,12 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     public void Navigate(NavigationEntry entry) => NavigateRequested?.Invoke(entry);
+
+    public void ShowStatus(string message)
+    {
+        StatusMessage = message;
+        IsStatusOpen = true;
+    }
 
     /// <summary>Looks for a newer GitHub release; failures only go to the log.</summary>
     public async Task CheckForUpdatesAsync()

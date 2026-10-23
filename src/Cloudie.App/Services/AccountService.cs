@@ -79,6 +79,42 @@ public sealed partial class AccountService(NeteaseApi api, LogService log) : Obs
         LikedSongsChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>Playlists the account created, without "我喜欢的音乐" (the heart handles that one).</summary>
+    public IReadOnlyList<PlaylistSummary> OwnPlaylists =>
+        Profile is { } profile ? Playlists.Where(p => p.Creator?.UserId == profile.UserId && !p.IsFavorites).ToList() : [];
+
+    public bool IsOwn(long playlistId) =>
+        Profile is { } profile && Playlists.Any(p => p.Id == playlistId && p.Creator?.UserId == profile.UserId);
+
+    public bool IsSubscribed(long playlistId) =>
+        Profile is { } profile && Playlists.Any(p => p.Id == playlistId && p.Creator?.UserId != profile.UserId);
+
+    public async Task ReloadPlaylistsAsync()
+    {
+        if (Profile is not { } profile) return;
+        Playlists = await api.GetUserPlaylistsAsync(profile.UserId);
+    }
+
+    public async Task SubscribePlaylistAsync(long playlistId, bool subscribe)
+    {
+        await api.SubscribePlaylistAsync(playlistId, subscribe);
+        await ReloadPlaylistsAsync();
+    }
+
+    /// <summary>Throws a <see cref="NeteaseApiException"/> with code 502 when the song is already in the playlist.</summary>
+    public Task AddToPlaylistAsync(long playlistId, long trackId) =>
+        api.ManipulatePlaylistTracksAsync(playlistId, [trackId], add: true);
+
+    public Task RemoveFromPlaylistAsync(long playlistId, long trackId) =>
+        api.ManipulatePlaylistTracksAsync(playlistId, [trackId], add: false);
+
+    public async Task<PlaylistSummary?> CreatePlaylistAsync(string name)
+    {
+        var playlist = await api.CreatePlaylistAsync(name);
+        await ReloadPlaylistsAsync();
+        return playlist;
+    }
+
     public async Task LogoutAsync()
     {
         try { await api.LogoutAsync(); }

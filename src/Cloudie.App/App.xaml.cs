@@ -25,6 +25,7 @@ public partial class App : Application
     {
         Services.Log.Info($"Cloudie {AppInfo.VersionText} starting");
         var theme = Services.Settings.Theme;
+        Services.Player.RestoreQueue();
         MainWindow = new MainWindow();
         MainWindow.ApplyTheme(theme);
         MainWindow.Activate();

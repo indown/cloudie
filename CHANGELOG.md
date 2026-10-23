@@ -16,3 +16,8 @@
   shortcuts (Space, Ctrl+←/→, Ctrl+L, Ctrl+F, Esc), update check against GitHub Releases with a status-bar offer.
 - Build: GitHub Actions compiles and publishes unpackaged x64/ARM64 zips; the version is stamped from the tag
   (`0.1.0-ci.N` for other builds) and shown in Settings → 关于.
+- App: 私人 FM page (start, dislike, like, play/pause, next; the queue refills itself), queue and position
+  restored at start-up (paused, URL fetched on play), playlist subscribe / unsubscribe, "添加到歌单" submenu and
+  "从歌单中移除" on own playlists, window size / position / maximized state remembered with a 960×600 minimum.
+- Core: personal FM and playlist endpoints, `PlaybackStore` (queue.json + playback.json), `PlaybackQueue.Restore`,
+  `WindowPlacement` setting with display fitting; 63 unit tests.
