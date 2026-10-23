@@ -17,6 +17,8 @@
 - Build: GitHub Actions compiles and publishes unpackaged x64/ARM64 zips; the version is stamped from the tag
   (`0.1.0-ci.N` for other builds) and shown in Settings → 关于.
 - App: 心动模式 from the liked-songs page (button, or a row's context menu); the player bar shows a mode badge.
+- App: create (with a private option), rename and delete own playlists from the sidebar ("新建歌单" row, context
+  menu) and from the playlist page; the sidebar highlight now follows the page, including after Back.
 - App: 私人 FM page (start, dislike, like, play/pause, next; the queue refills itself), queue and position
   restored at start-up (paused, URL fetched on play), playlist subscribe / unsubscribe, "添加到歌单" submenu and
   "从歌单中移除" on own playlists, window size / position / maximized state remembered with a 960×600 minimum.

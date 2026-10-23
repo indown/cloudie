@@ -108,11 +108,23 @@ public sealed partial class AccountService(NeteaseApi api, LogService log) : Obs
     public Task RemoveFromPlaylistAsync(long playlistId, long trackId) =>
         api.ManipulatePlaylistTracksAsync(playlistId, [trackId], add: false);
 
-    public async Task<PlaylistSummary?> CreatePlaylistAsync(string name)
+    public async Task<PlaylistSummary?> CreatePlaylistAsync(string name, bool isPrivate = false)
     {
-        var playlist = await api.CreatePlaylistAsync(name);
+        var playlist = await api.CreatePlaylistAsync(name, isPrivate);
         await ReloadPlaylistsAsync();
         return playlist;
+    }
+
+    public async Task RenamePlaylistAsync(long playlistId, string name)
+    {
+        await api.RenamePlaylistAsync(playlistId, name);
+        await ReloadPlaylistsAsync();
+    }
+
+    public async Task DeletePlaylistAsync(long playlistId)
+    {
+        await api.DeletePlaylistAsync(playlistId);
+        await ReloadPlaylistsAsync();
     }
 
     public async Task LogoutAsync()

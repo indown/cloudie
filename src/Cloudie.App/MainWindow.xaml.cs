@@ -22,6 +22,8 @@ public sealed partial class MainWindow : Window
 
     private readonly DispatcherQueueTimer _suggestTimer;
     private readonly DispatcherQueueTimer _placementTimer;
+    private NavigationEntry? _selectedEntry;
+    private bool _suppressNavigation;
     private CancellationTokenSource? _suggestCts;
 
     public MainWindow()
@@ -52,7 +54,14 @@ public sealed partial class MainWindow : Window
             ViewModel.Player.SavePosition();
         };
         ViewModel.NavigateRequested += Navigate;
+        ViewModel.MenuRebuilt += () =>
+        {
+            // Reloading the account replaces every row; keep the same destination highlighted.
+            if (_selectedEntry is { } previous) Select(Find(previous.Kind, previous.Id));
+        };
         ViewModel.Load();
+        _selectedEntry = Find(NavigationKind.Home, 0);
+        Select(_selectedEntry);
         ContentFrame.Navigate(typeof(HomePage));
     }
 
@@ -132,16 +141,22 @@ public sealed partial class MainWindow : Window
 
     private void Navigation_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
+        if (_suppressNavigation) return;
         if (args.IsSettingsSelected)
         {
+            _selectedEntry = null;
             ViewModel.Player.ShowNowPlaying = false;
             ContentFrame.Navigate(typeof(SettingsPage));
             return;
         }
-        if (args.SelectedItem is NavigationEntry entry && entry.Kind is not (NavigationKind.Header or NavigationKind.Separator))
+        if (args.SelectedItem is not NavigationEntry entry || entry.Kind is NavigationKind.Header or NavigationKind.Separator) return;
+        if (entry.Kind == NavigationKind.NewPlaylist)
         {
-            Navigate(entry);
+            _ = CreatePlaylistAsync();
+            return;
         }
+        _selectedEntry = entry;
+        Navigate(entry);
     }
 
     private void Navigation_BackRequested(NavigationView sender, NavigationViewBackRequestedEventArgs args)
@@ -154,12 +169,76 @@ public sealed partial class MainWindow : Window
         if (ContentFrame.CanGoBack) ContentFrame.GoBack();
     }
 
+    /// <summary>Keeps the sidebar highlight in step with the page, including after Back.</summary>
     private void ContentFrame_Navigated(object sender, NavigationEventArgs e)
     {
         Navigation.IsBackEnabled = ContentFrame.CanGoBack;
-        if (e.SourcePageType == typeof(SettingsPage))
+        object? target = e.Content switch
         {
-            Navigation.SelectedItem = Navigation.SettingsItem;
+            SettingsPage => Navigation.SettingsItem,
+            HomePage => Find(NavigationKind.Home, 0),
+            FmPage => Find(NavigationKind.Fm, 0),
+            TrackListPage when e.Parameter is TrackListRequest request => request.Kind switch
+            {
+                TrackListKind.DailySongs => Find(NavigationKind.DailySongs, 0),
+                TrackListKind.Playlist => Find(NavigationKind.Playlist, request.Id),
+                _ => null
+            },
+            _ => null
+        };
+        if (target is null) return;
+        if (target is NavigationEntry entry) _selectedEntry = entry;
+        Select(target);
+    }
+
+    private NavigationEntry? Find(NavigationKind kind, long id) =>
+        ViewModel.MenuItems.FirstOrDefault(m => m.Kind == kind && m.Id == id);
+
+    /// <summary>Changes the highlighted row without navigating.</summary>
+    private void Select(object? item)
+    {
+        if (ReferenceEquals(Navigation.SelectedItem, item)) return;
+        _suppressNavigation = true;
+        try
+        {
+            Navigation.SelectedItem = item;
+        }
+        finally
+        {
+            _suppressNavigation = false;
+        }
+    }
+
+    // MARK: Playlist management
+
+    /// <summary>"新建歌单" is a sidebar row: the previous highlight comes back unless a playlist was created.</summary>
+    private async Task CreatePlaylistAsync()
+    {
+        var created = Content?.XamlRoot is { } root ? await PlaylistDialogs.CreateAsync(root) : null;
+        if (created is null)
+        {
+            Select(_selectedEntry is { } previous ? Find(previous.Kind, previous.Id) : null);
+            return;
+        }
+        // The account reloaded its playlists, so the new one already has a row.
+        if (Find(NavigationKind.Playlist, created.Id) is { } entry) Navigation.SelectedItem = entry;
+        else Navigate(new NavigationEntry { Kind = NavigationKind.Playlist, Title = created.Name, Id = created.Id });
+    }
+
+    private async void RenamePlaylist_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not NavigationEntry entry || Content?.XamlRoot is not { } root) return;
+        var name = await PlaylistDialogs.RenameAsync(root, entry.Id, entry.Title);
+        if (name is not null && ContentFrame.Content is TrackListPage page && page.ViewModel.PlaylistId == entry.Id) page.ViewModel.ApplyName(name);
+    }
+
+    private async void DeletePlaylist_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not NavigationEntry entry || Content?.XamlRoot is not { } root) return;
+        if (!await PlaylistDialogs.DeleteAsync(root, entry.Id, entry.Title)) return;
+        if (ContentFrame.Content is TrackListPage page && page.ViewModel.PlaylistId == entry.Id && Find(NavigationKind.Home, 0) is { } home)
+        {
+            Navigation.SelectedItem = home;
         }
     }
 

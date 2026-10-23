@@ -28,6 +28,8 @@ public sealed partial class MainViewModel : ObservableObject
     public Visibility NowPlayingVisibility => Player.ShowNowPlaying ? Visibility.Visible : Visibility.Collapsed;
 
     public event Action<NavigationEntry>? NavigateRequested;
+    /// <summary>The sidebar rows were replaced (sign-in, playlist changes); the window re-applies its selection.</summary>
+    public event Action? MenuRebuilt;
 
     public void Load()
     {
@@ -51,6 +53,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void RebuildMenu()
     {
+        BuildMenu();
+        MenuRebuilt?.Invoke();
+    }
+
+    private void BuildMenu()
+    {
         MenuItems.Clear();
         MenuItems.Add(new NavigationEntry { Kind = NavigationKind.Home, Title = "推荐", Glyph = "" });
         MenuItems.Add(new NavigationEntry { Kind = NavigationKind.DailySongs, Title = "每日推荐", Glyph = "" });
@@ -62,18 +70,16 @@ public sealed partial class MainViewModel : ObservableObject
         var playlists = _account.Playlists;
         var mine = playlists.Where(p => p.Creator?.UserId == profile.UserId).ToList();
         var subscribed = playlists.Where(p => p.Creator?.UserId != profile.UserId).ToList();
-        if (mine.Count > 0)
+        MenuItems.Add(NavigationEntry.Header("创建的歌单"));
+        foreach (var playlist in mine)
         {
-            MenuItems.Add(NavigationEntry.Header("创建的歌单"));
-            foreach (var playlist in mine)
+            MenuItems.Add(new NavigationEntry
             {
-                MenuItems.Add(new NavigationEntry
-                {
-                    Kind = NavigationKind.Playlist, Title = playlist.Name, Id = playlist.Id,
-                    Glyph = playlist.IsFavorites ? "" : ""
-                });
-            }
+                Kind = NavigationKind.Playlist, Title = playlist.Name, Id = playlist.Id,
+                Glyph = playlist.IsFavorites ? "" : "", CanEdit = !playlist.IsFavorites
+            });
         }
+        MenuItems.Add(new NavigationEntry { Kind = NavigationKind.NewPlaylist, Title = "新建歌单", Glyph = "" });
         if (subscribed.Count > 0)
         {
             MenuItems.Add(NavigationEntry.Header("收藏的歌单"));

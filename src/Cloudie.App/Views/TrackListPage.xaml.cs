@@ -1,5 +1,6 @@
 using Cloudie.App.ViewModels;
 using Cloudie.Core.Netease.Models;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 
@@ -30,5 +31,18 @@ public sealed partial class TrackListPage : Page
     private void Album_ItemClick(object sender, ItemClickEventArgs e)
     {
         if (e.ClickedItem is AlbumSummary album) Frame.Navigate(typeof(TrackListPage), TrackListRequest.Album(album.Id, album.Name));
+    }
+
+    private async void Rename_Click(object sender, RoutedEventArgs e)
+    {
+        var name = await PlaylistDialogs.RenameAsync(XamlRoot, ViewModel.PlaylistId, ViewModel.Title);
+        if (name is not null) ViewModel.ApplyName(name);
+    }
+
+    private async void Delete_Click(object sender, RoutedEventArgs e)
+    {
+        if (!await PlaylistDialogs.DeleteAsync(XamlRoot, ViewModel.PlaylistId, ViewModel.Title)) return;
+        if (Frame.CanGoBack) Frame.GoBack();
+        else Frame.Navigate(typeof(HomePage));
     }
 }

@@ -76,6 +76,25 @@
                             </NavigationViewItem>
                         </DataTemplate>
                     </controls:NavigationItemTemplateSelector.ItemTemplate>
+                    <controls:NavigationItemTemplateSelector.EditableItemTemplate>
+                        <DataTemplate x:DataType="controls:NavigationEntry">
+                            <NavigationViewItem Content="{x:Bind Title}" Tag="{x:Bind}">
+                                <NavigationViewItem.Icon>
+                                    <FontIcon Glyph="{x:Bind Glyph}" />
+                                </NavigationViewItem.Icon>
+                                <NavigationViewItem.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="重命名" Click="RenamePlaylist_Click" Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8AC;" /></MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem Text="删除歌单" Click="DeletePlaylist_Click" Tag="{x:Bind}">
+                                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" /></MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                    </MenuFlyout>
+                                </NavigationViewItem.ContextFlyout>
+                            </NavigationViewItem>
+                        </DataTemplate>
+                    </controls:NavigationItemTemplateSelector.EditableItemTemplate>
                     <controls:NavigationItemTemplateSelector.HeaderTemplate>
                         <DataTemplate x:DataType="controls:NavigationEntry">
                             <NavigationViewItemHeader Content="{x:Bind Title}" />
