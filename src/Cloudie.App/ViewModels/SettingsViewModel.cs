@@ -16,7 +16,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public sealed record ThemeOption(AppTheme Value, string Name);
 
     public IReadOnlyList<QualityOption> Qualities { get; } =
-        [AudioQuality.Standard, AudioQuality.ExHigh, AudioQuality.Lossless, AudioQuality.HiRes]
+        new[] { AudioQuality.Standard, AudioQuality.ExHigh, AudioQuality.Lossless, AudioQuality.HiRes }
             .Select(static q => new QualityOption(q, q.DisplayName())).ToList();
 
     public IReadOnlyList<ThemeOption> Themes { get; } =

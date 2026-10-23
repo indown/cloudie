@@ -14,7 +14,7 @@ public sealed partial class HomePage : Page
     public HomePage()
     {
         InitializeComponent();
-        App.Services.Account.PropertyChanged += (_, e) =>
+        App.Services.Account.PropertyChanged += (sender, e) =>
         {
             if (e.PropertyName == nameof(Services.AccountService.Profile)) _ = ViewModel.LoadAsync();
         };
