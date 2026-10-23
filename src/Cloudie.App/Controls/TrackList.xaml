@@ -79,6 +79,9 @@
                             <MenuFlyoutItem Text="从歌单中移除" Click="RemoveMenu_Click" Tag="{x:Bind}" Visibility="Collapsed">
                                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" /></MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="心动模式" Click="HeartModeMenu_Click" Tag="{x:Bind}" Visibility="Collapsed">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEB52;" /></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                         </MenuFlyout>
                     </Grid.ContextFlyout>
                 </Grid>

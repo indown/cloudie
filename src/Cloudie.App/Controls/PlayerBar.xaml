@@ -20,7 +20,18 @@
                     <Image Source="{x:Bind Player.CurrentTrack.Album.PicUrl, Mode=OneWay, Converter={StaticResource CoverUrl}, ConverterParameter=112}" Stretch="UniformToFill" />
                 </Border>
                 <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="260">
-                    <TextBlock Text="{x:Bind Player.CurrentTrack.Name, Mode=OneWay}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                    <!-- Name trims inside a capped column so the mode badge stays beside it. -->
+                    <Grid ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MaxWidth="200" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{x:Bind Player.CurrentTrack.Name, Mode=OneWay}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                        <Border Grid.Column="1" Background="{ThemeResource CloudieAccentBrush}" CornerRadius="4" Padding="5,1" VerticalAlignment="Center"
+                                Visibility="{x:Bind ModeLabel, Mode=OneWay, Converter={StaticResource NullToVisibility}}">
+                            <TextBlock Text="{x:Bind ModeLabel, Mode=OneWay}" FontSize="10" Foreground="{ThemeResource CloudieSurfaceBrush}" />
+                        </Border>
+                    </Grid>
                     <TextBlock Text="{x:Bind Player.CurrentTrack.ArtistNames, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" />
                     <TextBlock Text="{x:Bind SourceLabel, Mode=OneWay}" FontSize="10" Foreground="{ThemeResource CloudieAccentBrush}"
                                Visibility="{x:Bind SourceLabel, Mode=OneWay, Converter={StaticResource NullToVisibility}}" />

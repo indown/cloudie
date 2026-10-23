@@ -174,6 +174,18 @@ public sealed class NeteaseApi(NeteaseClient client)
     public async Task TrashFmTrackAsync(long id, CancellationToken ct = default) =>
         await WeapiAsync<CodeOnlyResponse>($"/radio/trash/add?alg=RT&songId={id}&time=25", P(("songId", id)), ct).ConfigureAwait(false);
 
+    /// <summary>
+    /// 心动模式: songs that go with <paramref name="songId"/>, picked by NetEase from the account's taste
+    /// (<c>playmode/intelligence/list</c>). <paramref name="playlistId"/> is the "我喜欢的音乐" list.
+    /// </summary>
+    public async Task<IReadOnlyList<Track>> GetHeartModeListAsync(long songId, long playlistId, long? startMusicId = null, int count = 1, CancellationToken ct = default)
+    {
+        var response = await WeapiAsync<IntelligenceListResponse>("/playmode/intelligence/list",
+            P(("songId", songId), ("type", "fromPlayOne"), ("playlistId", playlistId), ("startMusicId", startMusicId ?? songId), ("count", count)), ct)
+            .ConfigureAwait(false);
+        return response.Data?.Select(static item => item.SongInfo).OfType<Track>().ToList() ?? [];
+    }
+
     // MARK: Playlist management
 
     public async Task SubscribePlaylistAsync(long id, bool subscribe, CancellationToken ct = default) =>

@@ -150,3 +150,16 @@ public sealed class CreatePlaylistResponse
     [JsonPropertyName("id")] public long Id { get; init; }
     [JsonPropertyName("playlist")] public PlaylistSummary? Playlist { get; init; }
 }
+
+public sealed class IntelligenceListResponse
+{
+    [JsonPropertyName("data")] public List<IntelligenceItem>? Data { get; init; }
+}
+
+public sealed class IntelligenceItem
+{
+    [JsonPropertyName("id")] public long Id { get; init; }
+    [JsonPropertyName("songInfo")] public Track? SongInfo { get; init; }
+    [JsonPropertyName("recommended")] public bool? Recommended { get; init; }
+    [JsonPropertyName("alg")] public string? Alg { get; init; }
+}
