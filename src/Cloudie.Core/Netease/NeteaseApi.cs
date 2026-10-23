@@ -164,6 +164,36 @@ public sealed class NeteaseApi(NeteaseClient client)
             .ToList() ?? [];
     }
 
+    // MARK: Personal FM
+
+    /// <summary>The next few songs of 私人 FM; NetEase hands out about three per call.</summary>
+    public async Task<IReadOnlyList<Track>> GetPersonalFmAsync(CancellationToken ct = default) =>
+        (await WeapiAsync<PersonalFmResponse>("/v1/radio/get", ct: ct).ConfigureAwait(false)).Data ?? [];
+
+    /// <summary>"不喜欢" in 私人 FM: the song leaves the station and the taste model learns from it.</summary>
+    public async Task TrashFmTrackAsync(long id, CancellationToken ct = default) =>
+        await WeapiAsync<CodeOnlyResponse>($"/radio/trash/add?alg=RT&songId={id}&time=25", P(("songId", id)), ct).ConfigureAwait(false);
+
+    // MARK: Playlist management
+
+    public async Task SubscribePlaylistAsync(long id, bool subscribe, CancellationToken ct = default) =>
+        await WeapiAsync<CodeOnlyResponse>(subscribe ? "/playlist/subscribe" : "/playlist/unsubscribe", P(("id", id)), ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// Adds or removes songs in one of the account's own playlists (<c>playlist/manipulate/tracks</c>).
+    /// NetEase answers 502 when every song is already in the playlist.
+    /// </summary>
+    public async Task ManipulatePlaylistTracksAsync(long playlistId, IEnumerable<long> trackIds, bool add, CancellationToken ct = default)
+    {
+        var ids = "[" + string.Join(",", trackIds) + "]";
+        await WeapiAsync<CodeOnlyResponse>("/playlist/manipulate/tracks",
+            P(("op", add ? "add" : "del"), ("pid", playlistId), ("trackIds", ids), ("imme", "true")), ct).ConfigureAwait(false);
+    }
+
+    public async Task<PlaylistSummary?> CreatePlaylistAsync(string name, bool isPrivate = false, CancellationToken ct = default) =>
+        (await WeapiAsync<CreatePlaylistResponse>("/playlist/create",
+            P(("name", name), ("privacy", isPrivate ? 10 : 0), ("type", "NORMAL")), ct).ConfigureAwait(false)).Playlist;
+
     // MARK: Listening history
 
     /// <summary>

@@ -139,3 +139,14 @@ public sealed class SuggestKeyword
     [JsonPropertyName("keyword")] public string Keyword { get; init; } = string.Empty;
     [JsonPropertyName("type")] public int Type { get; init; }
 }
+
+public sealed class PersonalFmResponse
+{
+    [JsonPropertyName("data")] public List<Track>? Data { get; init; }
+}
+
+public sealed class CreatePlaylistResponse
+{
+    [JsonPropertyName("id")] public long Id { get; init; }
+    [JsonPropertyName("playlist")] public PlaylistSummary? Playlist { get; init; }
+}
