@@ -1,0 +1,12 @@
+bin/
+obj/
+build/
+packages/
+*.user
+*.suo
+.vs/
+.idea/
+*.binlog
+BundleArtifacts/
+AppPackages/
+*.pfx

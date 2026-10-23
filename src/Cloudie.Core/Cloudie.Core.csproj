@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Cloudie.Core</RootNamespace>
+    <Description>Platform-independent core of Cloudie: NetEase Cloud Music API, lyrics, gray-track unlocking.</Description>
+  </PropertyGroup>
+
+</Project>
