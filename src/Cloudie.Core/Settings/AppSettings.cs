@@ -23,6 +23,7 @@ public sealed class AppSettings(ISettingsStore store)
         public const string SubsonicPassword = "unblock.navidrome.password";
         public const string Scrobble = "playback.scrobble";
         public const string CheckUpdates = "app.checkUpdates";
+        public const string WindowPlacement = "window.placement";
     }
 
     public static readonly IReadOnlyList<string> DefaultSourceOrder = [PyncmdAudioSource.SourceId, SubsonicAudioSource.SourceId];
@@ -64,6 +65,13 @@ public sealed class AppSettings(ISettingsStore store)
     {
         get => Store.GetBool(Keys.CheckUpdates, true);
         set => Store.SetBool(Keys.CheckUpdates, value);
+    }
+
+    /// <summary>Last window bounds; null until the window has been moved or closed once.</summary>
+    public WindowPlacement? WindowPlacement
+    {
+        get => WindowPlacement.Parse(Store.GetString(Keys.WindowPlacement));
+        set => Store.SetString(Keys.WindowPlacement, value?.ToJson());
     }
 
     public bool UnblockEnabled

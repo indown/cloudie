@@ -25,6 +25,28 @@ public sealed class PlaybackQueue
     public RepeatMode RepeatMode { get; set; } = RepeatMode.Off;
     public int Count => _items.Count;
 
+    /// <summary>The user's original order regardless of shuffle; with <see cref="PlayOrder"/> it is enough to persist the queue.</summary>
+    public IReadOnlyList<Track> OrderedItems => _ordered.ToArray();
+
+    /// <summary>For each entry of <see cref="Items"/>, its index in <see cref="OrderedItems"/>.</summary>
+    public IReadOnlyList<int> PlayOrder => _items.Select(track => _ordered.IndexOf(track)).ToArray();
+
+    /// <summary>
+    /// Puts back a persisted queue without reshuffling. <paramref name="playOrder"/> indexes into
+    /// <paramref name="ordered"/>; when it is missing or inconsistent the queue comes back unshuffled.
+    /// </summary>
+    public void Restore(IReadOnlyList<Track> ordered, IReadOnlyList<int>? playOrder, int currentIndex, bool shuffled)
+    {
+        _ordered.Clear();
+        _ordered.AddRange(ordered);
+        _items.Clear();
+        var validOrder = shuffled && playOrder is not null && playOrder.Count == ordered.Count
+                         && playOrder.All(index => index >= 0 && index < ordered.Count) && playOrder.Distinct().Count() == ordered.Count;
+        _items.AddRange(validOrder ? playOrder!.Select(index => ordered[index]) : ordered);
+        IsShuffled = validOrder;
+        CurrentIndex = _items.Count == 0 ? -1 : Math.Clamp(currentIndex, 0, _items.Count - 1);
+    }
+
     /// <summary>Replaces the queue and starts at <paramref name="startIndex"/> (the current song stays first in shuffle).</summary>
     public void Replace(IEnumerable<Track> tracks, int startIndex = 0)
     {

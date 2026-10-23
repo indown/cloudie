@@ -81,3 +81,88 @@ public class NeteaseApiTests
         Assert.Empty(handler.Requests);
     }
 }
+
+public class NeteaseApiPlaylistAndFmTests
+{
+    private static System.Text.Json.JsonDocument DecryptWeapi(string body)
+    {
+        var form = HttpUtility.ParseQueryString(body);
+        var inner = NeteaseCrypto.WeapiDecryptRound(Convert.FromBase64String(form["params"]!), NeteaseCrypto.DefaultWeapiSecretKey);
+        var plain = NeteaseCrypto.WeapiDecryptRound(Convert.FromBase64String(Encoding.UTF8.GetString(inner)), "0CoJUm6Qyw8W8jud");
+        return System.Text.Json.JsonDocument.Parse(Encoding.UTF8.GetString(plain));
+    }
+
+    [Fact]
+    public async Task Personal_fm_returns_legacy_shaped_tracks()
+    {
+        var handler = StubHandler.Json("""
+            {"code":200,"data":[{"id":5,"name":"fm song","artists":[{"id":1,"name":"a"}],"album":{"id":2,"name":"b","picUrl":"https://p/x.jpg"},"duration":123000}]}
+            """);
+        using var client = new NeteaseClient(handler: handler);
+
+        var tracks = await new NeteaseApi(client).GetPersonalFmAsync();
+
+        var track = Assert.Single(tracks);
+        Assert.Equal("fm song", track.Name);
+        Assert.Equal("a", track.ArtistNames);
+        Assert.Equal(TimeSpan.FromSeconds(123), track.Duration);
+        Assert.Equal("https://music.163.com/weapi/v1/radio/get", handler.Requests.Single().RequestUri!.ToString());
+    }
+
+    [Fact]
+    public async Task Trash_carries_the_song_in_the_query_and_the_body()
+    {
+        var handler = StubHandler.Json("""{"code":200}""");
+        using var client = new NeteaseClient(handler: handler);
+        await new NeteaseApi(client).TrashFmTrackAsync(5);
+        Assert.Equal("https://music.163.com/weapi/radio/trash/add?alg=RT&songId=5&time=25", handler.Requests.Single().RequestUri!.ToString());
+        using var payload = DecryptWeapi(handler.Bodies.Single());
+        Assert.Equal(5, payload.RootElement.GetProperty("songId").GetInt64());
+    }
+
+    [Fact]
+    public async Task Subscribe_and_unsubscribe_hit_their_own_endpoints()
+    {
+        var handler = StubHandler.Json("""{"code":200}""");
+        using var client = new NeteaseClient(handler: handler);
+        var api = new NeteaseApi(client);
+        await api.SubscribePlaylistAsync(42, subscribe: true);
+        await api.SubscribePlaylistAsync(42, subscribe: false);
+        Assert.Equal(
+            ["https://music.163.com/weapi/playlist/subscribe", "https://music.163.com/weapi/playlist/unsubscribe"],
+            handler.Requests.Select(r => r.RequestUri!.ToString()));
+    }
+
+    [Fact]
+    public async Task Manipulate_tracks_sends_the_operation_and_the_ids_as_a_json_string()
+    {
+        var handler = StubHandler.Json("""{"code":200,"count":2}""");
+        using var client = new NeteaseClient(handler: handler);
+        await new NeteaseApi(client).ManipulatePlaylistTracksAsync(42, [1, 2], add: true);
+        using var payload = DecryptWeapi(handler.Bodies.Single());
+        Assert.Equal("add", payload.RootElement.GetProperty("op").GetString());
+        Assert.Equal(42, payload.RootElement.GetProperty("pid").GetInt64());
+        Assert.Equal("[1,2]", payload.RootElement.GetProperty("trackIds").GetString());
+    }
+
+    [Fact]
+    public async Task Duplicate_adds_surface_netease_s_502()
+    {
+        var handler = StubHandler.Json("""{"code":502,"message":"歌曲已存在"}""");
+        using var client = new NeteaseClient(handler: handler);
+        var error = await Assert.ThrowsAsync<NeteaseApiException>(() => new NeteaseApi(client).ManipulatePlaylistTracksAsync(42, [1], add: true));
+        Assert.Equal(502, error.Code);
+    }
+
+    [Fact]
+    public async Task Create_playlist_returns_the_new_playlist()
+    {
+        var handler = StubHandler.Json("""{"code":200,"id":99,"playlist":{"id":99,"name":"new list","trackCount":0}}""");
+        using var client = new NeteaseClient(handler: handler);
+        var playlist = await new NeteaseApi(client).CreatePlaylistAsync("new list");
+        Assert.Equal(99, playlist!.Id);
+        using var payload = DecryptWeapi(handler.Bodies.Single());
+        Assert.Equal("new list", payload.RootElement.GetProperty("name").GetString());
+        Assert.Equal(0, payload.RootElement.GetProperty("privacy").GetInt32());
+    }
+}
