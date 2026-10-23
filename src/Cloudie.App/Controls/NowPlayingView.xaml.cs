@@ -12,7 +12,7 @@ namespace Cloudie.App.Controls;
 /// <summary>The immersive page: cover and metadata on the left, synced lyrics on the right.</summary>
 public sealed partial class NowPlayingView : UserControl, INotifyPropertyChanged
 {
-    private static readonly Brush ActiveBrush = new SolidColorBrush(Colors.White);
+    private static readonly Brush ActiveBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
     private static readonly Brush InactiveBrush = new SolidColorBrush(Color.FromArgb(0x80, 255, 255, 255));
 
     public PlayerService Player { get; } = App.Services.Player;
@@ -25,7 +25,7 @@ public sealed partial class NowPlayingView : UserControl, INotifyPropertyChanged
     public NowPlayingView()
     {
         InitializeComponent();
-        Player.PropertyChanged += (_, e) =>
+        Player.PropertyChanged += (sender, e) =>
         {
             switch (e.PropertyName)
             {

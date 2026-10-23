@@ -43,7 +43,7 @@ public sealed partial class PlayerService : ObservableObject
         _player.CommandManager.IsEnabled = false;
         _player.Volume = settings.Volume;
         _player.MediaEnded += (_, _) => _dispatcher.TryEnqueue(() => _ = NextAsync(manual: false));
-        _player.MediaFailed += (_, e) => _dispatcher.TryEnqueue(() =>
+        _player.MediaFailed += (sender, e) => _dispatcher.TryEnqueue(() =>
         {
             _log.Error($"播放失败: {e.ErrorMessage}");
             StatusMessage = "系统播放错误，已跳过";
@@ -272,7 +272,7 @@ public sealed partial class PlayerService : ObservableObject
         controls.IsPauseEnabled = true;
         controls.IsNextEnabled = true;
         controls.IsPreviousEnabled = true;
-        controls.ButtonPressed += (_, e) => _dispatcher.TryEnqueue(() =>
+        controls.ButtonPressed += (sender, e) => _dispatcher.TryEnqueue(() =>
         {
             switch (e.Button)
             {
