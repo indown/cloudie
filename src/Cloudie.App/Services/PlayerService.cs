@@ -36,6 +36,10 @@ public sealed partial class PlayerService : ObservableObject
     private TimeSpan? _pendingSeek;
     private DateTime _lastPositionSave;
     private bool _fetchingFm;
+    /// <summary>The current track's media reached the player; until then there is nothing to report or tick.</summary>
+    private bool _playbackStarted;
+    /// <summary>Automatic skips since a song last played, so a queue where nothing resolves does not cycle forever.</summary>
+    private int _skipsInARow;
 
     public PlayerService(NeteaseApi api, UnblockService unblock, AppSettings settings, AccountService account, LogService log, PlaybackStore store)
     {
@@ -67,7 +71,7 @@ public sealed partial class PlayerService : ObservableObject
         {
             _log.Error($"播放失败: {e.ErrorMessage}");
             StatusMessage = "系统播放错误，已跳过";
-            _ = NextAsync(manual: false);
+            _ = SkipUnplayableAsync();
         });
         _player.PlaybackSession.PlaybackStateChanged += (_, _) => _dispatcher.TryEnqueue(() =>
             IsPlaying = _player.PlaybackSession.PlaybackState == MediaPlaybackState.Playing);
@@ -145,7 +149,7 @@ public sealed partial class PlayerService : ObservableObject
 
     public void TogglePlayPause()
     {
-        if (CurrentTrack is null) return;
+        if (CurrentTrack is null || IsLoading) return;
         if (_player.Source is null)
         {
             // Restored from the last session: nothing is loaded yet, so fetch the URL now and resume.
@@ -169,7 +173,7 @@ public sealed partial class PlayerService : ObservableObject
 
     public Task PreviousAsync()
     {
-        if (Position > TimeSpan.FromSeconds(3))
+        if (_playbackStarted && Position > TimeSpan.FromSeconds(3))
         {
             Seek(TimeSpan.Zero);
             return Task.CompletedTask;
@@ -212,6 +216,11 @@ public sealed partial class PlayerService : ObservableObject
         var cts = _loadCts = new CancellationTokenSource();
         var generation = ++_loadGeneration;
         ReportPlay(completed: false);
+        // Silence the previous song now. Left alone it would keep playing until the new URL arrives, and its
+        // position would keep ticking into the new track's state (and into its listening report).
+        _player.Pause();
+        _player.Source = null;
+        _playbackStarted = false;
         CurrentTrack = track;
         _playReported = false;
         OnPropertyChanged(nameof(HasCurrentTrack));
@@ -231,13 +240,15 @@ public sealed partial class PlayerService : ObservableObject
             {
                 StatusMessage = $"《{track.Name}》没有可用的音源，已跳过";
                 _log.Warn($"no source for {track.Id} {track.Name}");
-                await NextAsync(manual: false);
+                await SkipUnplayableAsync();
                 return;
             }
+            _skipsInARow = 0;
             UnblockSource = resolved.Value.Source;
             ServedQuality = resolved.Value.Quality;
             _pendingSeek = resumeAt is { } seek && seek > TimeSpan.FromSeconds(1) ? seek : null;
             _player.Source = MediaSource.CreateFromUri(resolved.Value.Url);
+            _playbackStarted = true;
             _player.Play();
             UpdateTransportMetadata(track);
             _log.Info($"now playing {track.Id} {track.Name} via {resolved.Value.Source ?? "netease"} ({resolved.Value.Quality})");
@@ -251,7 +262,7 @@ public sealed partial class PlayerService : ObservableObject
         {
             if (generation != _loadGeneration) return;
             _log.Error($"load {track.Id}: {error}");
-            StatusMessage = $"加载失败：{error.Message}";
+            StatusMessage = $"加载失败：{ErrorText.Describe(error)}";
         }
         finally
         {
@@ -260,14 +271,30 @@ public sealed partial class PlayerService : ObservableObject
     }
 
     /// <summary>
+    /// Moves on from a song that cannot play. After a whole queue's worth of failures in a row it stops instead,
+    /// so a list of unavailable songs on repeat does not hammer the network.
+    /// </summary>
+    private async Task SkipUnplayableAsync()
+    {
+        if (++_skipsInARow >= Queue.Count)
+        {
+            _skipsInARow = 0;
+            StatusMessage = "队列里没有可以播放的歌曲";
+            return;
+        }
+        await NextAsync(manual: false);
+    }
+
+    /// <summary>
     /// Sends the finished (or abandoned) track to NetEase's listening history, once per play. Nothing is
-    /// reported when signed out, when the setting is off, or when the song was skipped within its first second.
+    /// reported for a song that never started, when signed out, when the setting is off, or when the song
+    /// was skipped within its first second.
     /// </summary>
     private void ReportPlay(bool completed)
     {
         if (_playReported || CurrentTrack is not { } track) return;
         _playReported = true;
-        if (!_settings.Scrobble || !_account.IsLoggedIn) return;
+        if (!_playbackStarted || !_settings.Scrobble || !_account.IsLoggedIn) return;
         var heard = completed ? Duration : Position;
         var seconds = (int)Math.Round(heard.TotalSeconds);
         if (seconds < 1) return;
