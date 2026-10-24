@@ -1,4 +1,5 @@
 using Cloudie.Core.Netease.Models;
+using Cloudie.Core.Netease;
 using Cloudie.Core.Playback;
 using Cloudie.Core.Settings;
 
@@ -27,6 +28,37 @@ public class PlaybackQueueTests
         Assert.Equal(1, queue.Current!.Id);
         Assert.True(queue.GoToPrevious());
         Assert.Equal(3, queue.Current!.Id);
+    }
+
+    [Fact]
+    public void Peek_next_follows_the_repeat_mode_and_the_shuffled_order_without_moving()
+    {
+        var queue = new PlaybackQueue(new Random(1));
+        queue.Replace([T(1), T(2), T(3)], 2);
+        Assert.Null(queue.PeekNext());
+        Assert.Equal(1, queue.PeekNext(manual: true)!.Id);
+        queue.RepeatMode = RepeatMode.All;
+        Assert.Equal(1, queue.PeekNext()!.Id);
+        queue.RepeatMode = RepeatMode.One;
+        Assert.Equal(3, queue.PeekNext()!.Id);
+        Assert.Equal(1, queue.PeekNext(manual: true)!.Id);
+        Assert.Equal(2, queue.CurrentIndex);
+        queue.RepeatMode = RepeatMode.Off;
+        queue.MoveTo(0);
+        queue.SetShuffle(true);
+        Assert.Equal(queue.Items[1].Id, queue.PeekNext()!.Id);
+    }
+
+    [Fact]
+    public void Resolved_media_is_usable_only_for_the_same_song_quality_and_while_fresh()
+    {
+        var now = new DateTimeOffset(2026, 10, 24, 12, 0, 0, TimeSpan.Zero);
+        var media = new ResolvedMedia(7, new Uri("https://example.com/7.mp3"), null, "exhigh", AudioQuality.ExHigh, now);
+        Assert.True(media.IsUsable(7, AudioQuality.ExHigh, now + TimeSpan.FromMinutes(9)));
+        Assert.False(media.IsUsable(8, AudioQuality.ExHigh, now));
+        Assert.False(media.IsUsable(7, AudioQuality.Lossless, now));
+        Assert.False(media.IsUsable(7, AudioQuality.ExHigh, now + ResolvedMedia.Lifetime));
+        Assert.False(media.IsUsable(7, AudioQuality.ExHigh, now - TimeSpan.FromSeconds(1)));
     }
 
     [Fact]

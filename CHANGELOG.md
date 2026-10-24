@@ -30,6 +30,12 @@
   the navigation pane compacts on narrow windows, the now-playing artwork scales instead of cropping, the minimum
   window size is DPI-aware, and the progress slider no longer snaps back while dragged.
 
+- App: 歌曲预热. Three seconds into a song the next one's URL is resolved in the background (NetEase first,
+  then the unlock sources); thirty seconds before the end its stream is opened too, so the switch needs no
+  network round trip. The entry follows shuffle / 下一首播放 / FM refills, is dropped when the quality setting
+  changes or after ten minutes, and a pre-opened stream that fails gets one cold retry. Core gains
+  `PlaybackQueue.PeekNext` and `ResolvedMedia`; 68 unit tests.
+
 ### Fixed
 
 - Core: NetEase answers `personalized/playlist` with `"playCount": 1.2345678E7`; every `int`/`long` field now
@@ -41,3 +47,8 @@
   seconds); a queue with nothing playable no longer cycles forever.
 - App: the home page loaded signed out at start-up and again a second later once the session was restored; the
   theme brushes now live inside the theme dictionaries so controls stop mixing light and dark values.
+- App: Media Foundation reports one playback failure several times; each report skipped a song, so one bad
+  stream threw away the next three as well. A failure is now handled once per loaded source (and never
+  attributed to the source that replaced it), is logged with its error kind and HRESULT, is never scrobbled,
+  and a restored session whose file cannot seek to the saved position starts from the beginning instead of
+  being skipped.

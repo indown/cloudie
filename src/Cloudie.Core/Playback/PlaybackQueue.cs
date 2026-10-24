@@ -136,6 +136,13 @@ public sealed class PlaybackQueue
         return RepeatMode == RepeatMode.Off && !manual ? -1 : 0;
     }
 
+    /// <summary>The song that would play after the current one, without moving; null when the queue would end.</summary>
+    public Track? PeekNext(bool manual = false)
+    {
+        var next = NextIndex(manual);
+        return next >= 0 ? _items[next] : null;
+    }
+
     public int PreviousIndex()
     {
         if (_items.Count == 0) return -1;

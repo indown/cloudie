@@ -40,6 +40,38 @@ public sealed partial class PlayerService : ObservableObject
     private bool _playbackStarted;
     /// <summary>Automatic skips since a song last played, so a queue where nothing resolves does not cycle forever.</summary>
     private int _skipsInARow;
+    /// <summary>The source handed to the player for the current song, disposed when replaced.</summary>
+    private MediaSource? _currentSource;
+    /// <summary>How the current song was resolved; reused when the same song plays again (repeat one).</summary>
+    private ResolvedMedia? _currentMedia;
+    /// <summary>True when the current source was opened ahead of time; a failure then gets one cold retry.</summary>
+    private bool _currentWasPreopened;
+    /// <summary>The load generation whose source is in the player, and the one whose failure was already handled.</summary>
+    private int _sourceGeneration;
+    private int _failedGeneration;
+    /// <summary>Where a restored session asked to resume; a failure to seek there is retried from the start.</summary>
+    private TimeSpan? _resumedAt;
+    private Prefetch? _prefetch;
+    /// <summary>The URL of the next song is resolved this long after the current one starts, so the start buffers first.</summary>
+    private static readonly TimeSpan PrefetchDelay = TimeSpan.FromSeconds(3);
+    /// <summary>With this much left, the next song's stream is opened so the switch has nothing to wait for.</summary>
+    private static readonly TimeSpan PreopenBeforeEnd = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// 歌曲预热: the song after the current one, resolved (and near the end, opened) ahead of time. The URL is
+    /// fetched early because it is cheap; the stream only shortly before it is needed, so an idle connection
+    /// does not go stale and the current song keeps the bandwidth.
+    /// </summary>
+    private sealed class Prefetch(long trackId, AudioQuality quality)
+    {
+        public long TrackId { get; } = trackId;
+        public AudioQuality Quality { get; } = quality;
+        public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
+        public CancellationTokenSource Cts { get; } = new();
+        public Task<ResolvedMedia?> Resolving { get; set; } = Task.FromResult<ResolvedMedia?>(null);
+        public Task<MediaSource?>? Opening { get; set; }
+        public bool IsStale => DateTimeOffset.UtcNow - StartedAt > ResolvedMedia.Lifetime;
+    }
 
     public PlayerService(NeteaseApi api, UnblockService unblock, AppSettings settings, AccountService account, LogService log, PlaybackStore store)
     {
@@ -67,12 +99,13 @@ public sealed partial class PlayerService : ObservableObject
             ReportPlay(completed: true);
             _ = NextAsync(manual: false);
         });
-        _player.MediaFailed += (sender, e) => _dispatcher.TryEnqueue(() =>
+        _player.MediaFailed += (sender, e) =>
         {
-            _log.Error($"播放失败: {e.ErrorMessage}");
-            StatusMessage = "系统播放错误，已跳过";
-            _ = SkipUnplayableAsync();
-        });
+            // Read on the player's thread, before the UI thread can swap the source: it tells which load failed.
+            var generation = Volatile.Read(ref _sourceGeneration);
+            var detail = $"{e.Error} (0x{e.ExtendedErrorCode?.HResult ?? 0:X8}) {e.ErrorMessage}".Trim();
+            _dispatcher.TryEnqueue(() => _ = OnMediaFailedAsync(generation, detail));
+        };
         _player.PlaybackSession.PlaybackStateChanged += (_, _) => _dispatcher.TryEnqueue(() =>
             IsPlaying = _player.PlaybackSession.PlaybackState == MediaPlaybackState.Playing);
         _ticker = _dispatcher.CreateTimer();
@@ -145,6 +178,7 @@ public sealed partial class PlayerService : ObservableObject
         OnPropertyChanged(nameof(Queue));
         SaveQueue();
         if (CurrentTrack is null) _ = PlayCurrentAsync();
+        else PrefetchNext();
     }
 
     public void TogglePlayPause()
@@ -194,6 +228,7 @@ public sealed partial class PlayerService : ObservableObject
         IsShuffled = Queue.IsShuffled;
         OnPropertyChanged(nameof(Queue));
         SaveQueue();
+        PrefetchNext();
     }
 
     public void CycleRepeatMode()
@@ -206,6 +241,7 @@ public sealed partial class PlayerService : ObservableObject
         };
         RepeatMode = Queue.RepeatMode;
         SaveQueue();
+        PrefetchNext();
     }
 
     private async Task PlayCurrentAsync(TimeSpan? resumeAt = null)
@@ -220,6 +256,10 @@ public sealed partial class PlayerService : ObservableObject
         // position would keep ticking into the new track's state (and into its listening report).
         _player.Pause();
         _player.Source = null;
+        _currentSource?.Dispose();
+        _currentSource = null;
+        _currentWasPreopened = false;
+        _resumedAt = resumeAt;
         _playbackStarted = false;
         CurrentTrack = track;
         _playReported = false;
@@ -234,8 +274,14 @@ public sealed partial class PlayerService : ObservableObject
         IsLoading = true;
         try
         {
-            var resolved = await ResolveAsync(track, cts.Token);
-            if (generation != _loadGeneration) return;
+            // A restored session seeks after MediaOpened, so it always opens its stream itself.
+            var prefetched = resumeAt is null ? await TakePrefetchedAsync(track, cts.Token) : null;
+            var resolved = prefetched?.Media ?? ReuseCurrentMedia(track) ?? await ResolveAsync(track, cts.Token);
+            if (generation != _loadGeneration)
+            {
+                prefetched?.Source?.Dispose();
+                return;
+            }
             if (resolved is null)
             {
                 StatusMessage = $"《{track.Name}》没有可用的音源，已跳过";
@@ -244,16 +290,22 @@ public sealed partial class PlayerService : ObservableObject
                 return;
             }
             _skipsInARow = 0;
-            UnblockSource = resolved.Value.Source;
-            ServedQuality = resolved.Value.Quality;
+            UnblockSource = resolved.SourceName;
+            ServedQuality = resolved.Quality;
             _pendingSeek = resumeAt is { } seek && seek > TimeSpan.FromSeconds(1) ? seek : null;
-            _player.Source = MediaSource.CreateFromUri(resolved.Value.Url);
+            _currentSource = prefetched?.Source ?? MediaSource.CreateFromUri(resolved.Url);
+            _currentMedia = resolved;
+            _currentWasPreopened = prefetched?.Source is not null;
+            _sourceGeneration = generation;
+            _player.Source = _currentSource;
             _playbackStarted = true;
             _player.Play();
             UpdateTransportMetadata(track);
-            _log.Info($"now playing {track.Id} {track.Name} via {resolved.Value.Source ?? "netease"} ({resolved.Value.Quality})");
+            var how = prefetched is null ? "" : _currentWasPreopened ? " [预热: 链接+流]" : " [预热: 链接]";
+            _log.Info($"now playing {track.Id} {track.Name} via {resolved.SourceName ?? "netease"} ({resolved.Quality}){how}");
             _ = LoadLyricsAsync(track, generation, cts.Token);
             if ((IsFm || IsHeartMode) && Queue.CurrentIndex >= Queue.Count - 1) _ = TopUpAsync();
+            PrefetchNext();
         }
         catch (OperationCanceledException)
         {
@@ -268,6 +320,39 @@ public sealed partial class PlayerService : ObservableObject
         {
             if (generation == _loadGeneration) IsLoading = false;
         }
+    }
+
+    /// <summary>
+    /// Media Foundation reports one failure several times in a burst. The first report for a loaded source
+    /// decides; the rest are ignored, and the decision waits a moment so the burst is over before any new
+    /// source is in the player (otherwise the stragglers would be blamed on the new song).
+    /// </summary>
+    private async Task OnMediaFailedAsync(int generation, string detail)
+    {
+        if (generation != _loadGeneration || _failedGeneration == generation) return;
+        _failedGeneration = generation;
+        var preopened = _currentWasPreopened;
+        var resumedAt = _resumedAt;
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        if (generation != _loadGeneration) return;   // the user moved on meanwhile
+        _playReported = true;   // a song that failed to play is not a listen, whatever position it claims
+        if (preopened)
+        {
+            // The stream opened ahead of time may have gone stale; load the song again from scratch.
+            _log.Warn($"播放失败 (预热的流): {detail}，重新加载");
+            await PlayCurrentAsync();
+            return;
+        }
+        if (resumedAt is { } resume)
+        {
+            // A restored session seeks on open; a file shorter than NetEase's duration cannot. Start over instead.
+            _log.Warn($"播放失败 (恢复到 {resume:mm\\:ss}): {detail}，从头播放");
+            await PlayCurrentAsync();
+            return;
+        }
+        _log.Error($"播放失败: {detail}");
+        StatusMessage = "系统播放错误，已跳过";
+        await SkipUnplayableAsync();
     }
 
     /// <summary>
@@ -314,7 +399,7 @@ public sealed partial class PlayerService : ObservableObject
     }
 
     /// <summary>NetEase first, in the chosen quality; refusals and trials fall through to the gray-track sources.</summary>
-    private async Task<(Uri Url, string? Source, string? Quality)?> ResolveAsync(Track track, CancellationToken ct)
+    private async Task<ResolvedMedia?> ResolveAsync(Track track, CancellationToken ct)
     {
         var quality = _settings.AudioQuality;
         SongUrlData? data = null;
@@ -328,16 +413,143 @@ public sealed partial class PlayerService : ObservableObject
         }
         if (data?.Url is { Length: > 0 } url && !data.IsTrial)
         {
-            return (new Uri(url.Replace("http://", "https://")), null, data.Level);
+            return new ResolvedMedia(track.Id, new Uri(url.Replace("http://", "https://")), null, data.Level, quality, DateTimeOffset.UtcNow);
         }
         if (!_settings.UnblockEnabled) return null;
         var resolved = await _unblock.ResolveAsync(UnblockTrack.From(track), quality, ct);
         if (resolved is null)
         {
             // A 30-second trial is still better than nothing.
-            return data?.Url is { Length: > 0 } trial ? (new Uri(trial.Replace("http://", "https://")), null, "试听") : null;
+            return data?.Url is { Length: > 0 } trial
+                ? new ResolvedMedia(track.Id, new Uri(trial.Replace("http://", "https://")), null, "试听", quality, DateTimeOffset.UtcNow)
+                : null;
         }
-        return (resolved.Url, resolved.SourceName, resolved.Format);
+        return new ResolvedMedia(track.Id, resolved.Url, resolved.SourceName, resolved.Format, quality, DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>Repeat-one plays the same song again: its link is still good, so no lookup is needed.</summary>
+    private ResolvedMedia? ReuseCurrentMedia(Track track) =>
+        _currentMedia is { } media && media.IsUsable(track.Id, _settings.AudioQuality, DateTimeOffset.UtcNow) ? media : null;
+
+    // MARK: 歌曲预热
+
+    /// <summary>
+    /// Starts resolving the song that follows the current one. Does nothing while a fresh answer for that
+    /// song is already here or on its way; a changed "next" (shuffle, 下一首播放, a refill) replaces it.
+    /// </summary>
+    private void PrefetchNext()
+    {
+        var next = Queue.PeekNext();
+        if (next is null || next.Id == CurrentTrack?.Id)
+        {
+            DropPrefetch();
+            return;
+        }
+        var quality = _settings.AudioQuality;
+        if (_prefetch is { } existing)
+        {
+            if (existing.TrackId == next.Id && existing.Quality == quality && !existing.IsStale) return;
+            DropPrefetch();
+        }
+        var prefetch = new Prefetch(next.Id, quality);
+        prefetch.Resolving = ResolveAheadAsync(next, prefetch.Cts.Token);
+        _prefetch = prefetch;
+    }
+
+    private async Task<ResolvedMedia?> ResolveAheadAsync(Track track, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(PrefetchDelay, ct);
+            ResolvedMedia? media;
+            try
+            {
+                media = await ResolveAsync(track, ct);
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                // A dropped connection is common right after a song starts streaming; one more try a bit later.
+                _log.Warn($"prefetch {track.Id}: {error.Message}, retrying");
+                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                media = await ResolveAsync(track, ct);
+            }
+            if (media is null) _log.Warn($"prefetch {track.Id} {track.Name}: no source");
+            else _log.Info($"prefetched {track.Id} {track.Name} via {media.SourceName ?? "netease"} ({media.Quality})");
+            return media;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"prefetch {track.Id}: {error.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Opens the stream of a resolved next song so the player can start it without a connection round trip.</summary>
+    private async Task<MediaSource?> OpenAheadAsync(ResolvedMedia media, CancellationToken ct)
+    {
+        var source = MediaSource.CreateFromUri(media.Url);
+        try
+        {
+            await source.OpenAsync().AsTask(ct);
+            if (!ct.IsCancellationRequested) return source;
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            _log.Warn($"preopen {media.TrackId}: {error.Message}");
+        }
+        source.Dispose();
+        return null;
+    }
+
+    /// <summary>
+    /// Hands over the prefetched answer when it is for <paramref name="track"/> and still fits the quality
+    /// setting and the age limit; anything else is dropped. The entry is consumed either way.
+    /// </summary>
+    private async Task<(ResolvedMedia Media, MediaSource? Source)?> TakePrefetchedAsync(Track track, CancellationToken ct)
+    {
+        if (_prefetch is not { } prefetch) return null;
+        _prefetch = null;
+        if (prefetch.TrackId != track.Id)
+        {
+            Discard(prefetch);
+            return null;
+        }
+        try
+        {
+            var media = await prefetch.Resolving.WaitAsync(ct);
+            if (media is null || !media.IsUsable(track.Id, _settings.AudioQuality, DateTimeOffset.UtcNow))
+            {
+                Discard(prefetch);
+                return null;
+            }
+            var source = prefetch.Opening is { } opening ? await opening.WaitAsync(ct) : null;
+            return (media, source);
+        }
+        catch (OperationCanceledException)
+        {
+            Discard(prefetch);
+            throw;
+        }
+    }
+
+    private void DropPrefetch()
+    {
+        if (_prefetch is { } prefetch) Discard(prefetch);
+        _prefetch = null;
+    }
+
+    /// <summary>Cancels what is still running and disposes a stream that was already opened, whenever it lands.</summary>
+    private static void Discard(Prefetch prefetch)
+    {
+        prefetch.Cts.Cancel();
+        prefetch.Opening?.ContinueWith(static t =>
+        {
+            if (t.IsCompletedSuccessfully) t.Result?.Dispose();
+        }, TaskScheduler.Default);
     }
 
     private async Task LoadLyricsAsync(Track track, int generation, CancellationToken ct)
@@ -363,6 +575,14 @@ public sealed partial class PlayerService : ObservableObject
         var index = Lyrics.ActiveIndex(Position);
         if (index != ActiveLyricIndex) ActiveLyricIndex = index;
         if (IsPlaying && DateTime.UtcNow - _lastPositionSave > TimeSpan.FromSeconds(10)) SavePosition();
+        if (IsPlaying && Duration > TimeSpan.Zero && Duration - Position < PreopenBeforeEnd)
+        {
+            if (_prefetch is null || _prefetch.IsStale) PrefetchNext();
+            if (_prefetch is { Opening: null, Resolving.IsCompletedSuccessfully: true } prefetch && prefetch.Resolving.Result is { } media)
+            {
+                prefetch.Opening = OpenAheadAsync(media, prefetch.Cts.Token);
+            }
+        }
     }
 
     // MARK: 私人 FM
@@ -421,6 +641,7 @@ public sealed partial class PlayerService : ObservableObject
             Queue.RemoveAt(index);
             OnPropertyChanged(nameof(Queue));
             SaveQueue();
+            PrefetchNext();
         }
     }
 
@@ -489,6 +710,7 @@ public sealed partial class PlayerService : ObservableObject
             Queue.Append(fresh);
             OnPropertyChanged(nameof(Queue));
             SaveQueue();
+            PrefetchNext();
         }
         catch (Exception error)
         {
