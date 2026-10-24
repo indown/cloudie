@@ -22,12 +22,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<ThemeOption> Themes { get; } =
         [new(AppTheme.System, "跟随系统"), new(AppTheme.Light, "浅色"), new(AppTheme.Dark, "深色")];
 
+    // Both setters bail out on the value they already hold. WinUI treats every assignment of an object-typed
+    // SelectedItem as a change, so without the guard the two-way binding and PropertyChanged feed each other
+    // until the stack overflows (the theme one re-applied the theme on every pass, which is how it showed up).
     public QualityOption SelectedQuality
     {
         get => Qualities.First(q => q.Value == _settings.AudioQuality);
         set
         {
-            if (value is null) return;
+            if (value is null || value.Value == _settings.AudioQuality) return;
             _settings.AudioQuality = value.Value;
             OnPropertyChanged();
         }
@@ -38,7 +41,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         get => Themes.First(t => t.Value == _settings.Theme);
         set
         {
-            if (value is null) return;
+            if (value is null || value.Value == _settings.Theme) return;
             _settings.Theme = value.Value;
             App.MainWindow?.ApplyTheme(value.Value);
             OnPropertyChanged();
