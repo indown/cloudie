@@ -3,7 +3,9 @@ param(
     [string]$Process = "Cloudie",
     [Parameter(Mandatory = $true)][string]$Path,
     # Extra wait after the window is found, for pages that are still loading.
-    [int]$DelayMs = 0
+    [int]$DelayMs = 0,
+    # "x,y,w,h" in window-relative physical pixels: save only that part, scaled up 2x for inspection.
+    [string]$Crop = ""
 )
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
@@ -41,6 +43,18 @@ if ($width -le 0 -or $height -le 0) { throw "window has no size" }
 $bitmap = New-Object System.Drawing.Bitmap $width, $height
 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
 $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
-$bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+if ($Crop) {
+    $c = $Crop.Split(",") | ForEach-Object { [int]$_ }
+    $part = $bitmap.Clone((New-Object System.Drawing.Rectangle $c[0], $c[1], $c[2], $c[3]), $bitmap.PixelFormat)
+    $zoom = New-Object System.Drawing.Bitmap ($c[2] * 2), ($c[3] * 2)
+    $g2 = [System.Drawing.Graphics]::FromImage($zoom)
+    $g2.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+    $g2.DrawImage($part, 0, 0, $c[2] * 2, $c[3] * 2)
+    $zoom.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $g2.Dispose(); $zoom.Dispose(); $part.Dispose()
+    $width = $c[2] * 2; $height = $c[3] * 2
+} else {
+    $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+}
 $graphics.Dispose(); $bitmap.Dispose()
 Write-Output "$Path ${width}x${height}"

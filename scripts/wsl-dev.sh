@@ -5,7 +5,7 @@
 #   scripts/wsl-dev.sh build [Debug|Release]   sync the tree to $CLOUDIE_WIN_DIR and build x64
 #   scripts/wsl-dev.sh run                     start the last Debug build (stops a running instance first)
 #   scripts/wsl-dev.sh stop                    stop Cloudie.exe
-#   scripts/wsl-dev.sh shot [name] [delayMs]   capture the Cloudie window to /tmp/cloudie-shots/<name>.png
+#   scripts/wsl-dev.sh shot [name] [delayMs] [x,y,w,h]   capture the Cloudie window to /tmp/cloudie-shots/<name>.png (crop = 2x zoom)
 #   scripts/wsl-dev.sh ui <args...>            drive the window: ui invoke "每日推荐" | ui click 100 200 | ui rclick 100 200 |
 #                                              ui keys "^l" | ui type "text" | ui select ComboBox 1 "深色" | ui resize 1200 750 | ui tree
 #   scripts/wsl-dev.sh log [n]                 tail the app log in %LOCALAPPDATA%\Cloudie
@@ -58,7 +58,7 @@ cmd_shot() {
   mkdir -p "$SHOTS"
   local target
   target="$(win_path "$SHOTS/$name.png")"
-  (cd "$WIN_HOME" && powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$(win_path "$REPO/scripts/win-screenshot.ps1")" -Process Cloudie -Path "$target" -DelayMs "${3:-0}" 2>&1 | tr -d '\r')
+  (cd "$WIN_HOME" && powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$(win_path "$REPO/scripts/win-screenshot.ps1")" -Process Cloudie -Path "$target" -DelayMs "${3:-0}" -Crop "${4:-}" 2>&1 | tr -d '\r')
   echo "$SHOTS/$name.png"
 }
 
@@ -67,7 +67,7 @@ cmd_ui() {
   local args=()
   case "$action" in
     invoke) args=(-Name "$1") ;;
-    click|rclick|resize) args=(-X "$1" -Y "$2") ;;
+    click|rclick|resize|hover) args=(-X "$1" -Y "$2") ;;
     scroll) args=(-X "$1" -Y "$2" -Value "$3") ;;
     select) args=(-Type "$1" -Index "$2" -Value "$3") ;;
     keys|type) args=(-Keys "$1") ;;

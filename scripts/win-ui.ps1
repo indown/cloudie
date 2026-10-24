@@ -4,6 +4,7 @@
 #   -Action keys -Keys "^l"              SendKeys to the window (^ Ctrl, % Alt, + Shift, {ENTER}, {ESC}, ...)
 #   -Action type -Keys "周杰伦"          type literal text (no SendKeys escaping)
 #   -Action rclick -X 100 -Y 200         right-click at window-relative physical pixels
+#   -Action hover -X 100 -Y 200          move the pointer there without clicking (hover states)
 #   -Action select -Type ComboBox -Index 1 -Value "深色"   open the nth control of that type and pick an item
 #   -Action resize -X 1200 -Y 750        resize the window to physical pixels (position unchanged)
 #   -Action scroll -X 100 -Y 200 -Value -5   mouse-wheel at a window-relative point (negative = down, in notches)
@@ -102,6 +103,15 @@ switch ($Action) {
         $delta = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]([int]$Value * 120)), 0)   # negative notches as DWORD
         [Native]::mouse_event(0x0800, 0, 0, $delta, [UIntPtr]::Zero)
         Write-Output "scrolled $Value at $X,$Y"
+    }
+    "hover" {
+        $rect = Window-Rect
+        [void][Native]::SetCursorPos($rect.Left + $X, $rect.Top + $Y)
+        # SetCursorPos alone does not reach WinUI's pointer input; a tiny injected move does.
+        [Native]::mouse_event(0x0001, 1, 0, 0, [UIntPtr]::Zero)
+        [Native]::mouse_event(0x0001, -1, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 200
+        Write-Output "pointer at $X,$Y"
     }
     "rclick" {
         $rect = Window-Rect
