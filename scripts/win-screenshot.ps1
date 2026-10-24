@@ -16,6 +16,7 @@ using System.Runtime.InteropServices;
 public static class Win32 {
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT rect, int size);
@@ -32,6 +33,9 @@ do {
 if (-not $proc) { throw "no window for process '$Process'" }
 $hwnd = $proc.MainWindowHandle
 if ([Win32]::IsIconic($hwnd)) { [void][Win32]::ShowWindow($hwnd, 9) }
+# A background process is usually refused SetForegroundWindow; a topmost / not-topmost flip still puts the window on top.
+[void][Win32]::SetWindowPos($hwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043)   # HWND_TOPMOST, NOSIZE|NOMOVE|SHOWWINDOW
+[void][Win32]::SetWindowPos($hwnd, [IntPtr](-2), 0, 0, 0, 0, 0x0043)   # HWND_NOTOPMOST
 [void][Win32]::SetForegroundWindow($hwnd)
 Start-Sleep -Milliseconds (400 + $DelayMs)
 $rect = New-Object Win32+RECT

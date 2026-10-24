@@ -28,6 +28,7 @@ using System.Runtime.InteropServices;
 public static class Native {
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, UIntPtr extra);
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT rect, int size);
@@ -40,6 +41,9 @@ public static class Native {
 $proc = Get-Process -Name $Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 if (-not $proc) { throw "no window for process '$Process'" }
 $hwnd = $proc.MainWindowHandle
+# A background process is usually refused SetForegroundWindow; a topmost / not-topmost flip still puts the window on top.
+[void][Native]::SetWindowPos($hwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043)   # HWND_TOPMOST, NOSIZE|NOMOVE|SHOWWINDOW
+[void][Native]::SetWindowPos($hwnd, [IntPtr](-2), 0, 0, 0, 0, 0x0043)   # HWND_NOTOPMOST
 [void][Native]::SetForegroundWindow($hwnd)
 Start-Sleep -Milliseconds 150
 $root = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
@@ -106,10 +110,14 @@ switch ($Action) {
     }
     "hover" {
         $rect = Window-Rect
-        [void][Native]::SetCursorPos($rect.Left + $X, $rect.Top + $Y)
-        # SetCursorPos alone does not reach WinUI's pointer input; a tiny injected move does.
-        [Native]::mouse_event(0x0001, 1, 0, 0, [UIntPtr]::Zero)
-        [Native]::mouse_event(0x0001, -1, 0, 0, [UIntPtr]::Zero)
+        # SetCursorPos alone does not reach WinUI's pointer input, and enter/leave needs a path that crosses the
+        # element's edge: start 48 px up-left and walk in with injected relative moves.
+        [void][Native]::SetCursorPos($rect.Left + $X - 48, $rect.Top + $Y - 48)
+        Start-Sleep -Milliseconds 40
+        for ($i = 0; $i -lt 8; $i++) {
+            [Native]::mouse_event(0x0001, 6, 6, 0, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 15
+        }
         Start-Sleep -Milliseconds 200
         Write-Output "pointer at $X,$Y"
     }
