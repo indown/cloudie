@@ -39,7 +39,11 @@ public sealed partial class TrackRow(Track track, TrackPlayability playability, 
     public TrackPlayability Playability { get; } = playability;
     public bool IsGray => Playability is not TrackPlayability.Playable;
     public string? GrayReason => Playability.Reason();
-    public double Opacity => IsGray ? 0.6 : 1.0;
+    /// <summary>
+    /// Dimmed only when nothing could play it: with 灰色歌曲解锁 on, the badge is enough and a dimmed row would
+    /// read as "cannot be played" although the other sources usually can.
+    /// </summary>
+    public double Opacity => IsGray && !App.Services.Settings.UnblockEnabled ? 0.6 : 1.0;
     [ObservableProperty] public partial bool IsLiked { get; set; }
     [ObservableProperty] public partial bool IsCurrent { get; set; }
 }

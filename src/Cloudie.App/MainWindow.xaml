@@ -14,7 +14,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="80" />
+            <RowDefinition Height="92" />
         </Grid.RowDefinitions>
         <!-- Shortcuts live on the root so they work on every page; the handlers skip text boxes and buttons. -->
         <Grid.KeyboardAccelerators>

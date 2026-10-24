@@ -62,6 +62,9 @@
                 <Button Style="{StaticResource PlayerIconButtonStyle}" Width="48" Height="48" CornerRadius="24"
                         Background="{ThemeResource CloudieTextPrimaryBrush}" Click="PlayPause_Click"
                         AutomationProperties.Name="{x:Bind PlayPauseLabel, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind PlayPauseLabel, Mode=OneWay}">
+                    <Button.Resources>
+                        <ResourceDictionary Source="ms-appx:///Styles/PlayButton.xaml" />
+                    </Button.Resources>
                     <FontIcon Glyph="{x:Bind PlayGlyph, Mode=OneWay}" FontSize="18" Foreground="{ThemeResource CloudieSurfaceBrush}" />
                 </Button>
                 <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Next_Click" ToolTipService.ToolTip="下一首" AutomationProperties.Name="下一首">
