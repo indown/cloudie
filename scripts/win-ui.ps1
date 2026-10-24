@@ -5,6 +5,7 @@
 #   -Action type -Keys "周杰伦"          type literal text (no SendKeys escaping)
 #   -Action rclick -X 100 -Y 200         right-click at window-relative physical pixels
 #   -Action dblclick -X 100 -Y 200       double-click there
+#   -Action drag -X 100 -Y 200 -Value "100,900"   press at X,Y, move to the end point, release (scrollbar scrubbing)
 #   -Action hover -X 100 -Y 200          move the pointer there without clicking (hover states)
 #   -Action select -Type ComboBox -Index 1 -Value "深色"   open the nth control of that type and pick an item
 #   -Action resize -X 1200 -Y 750        resize the window to physical pixels (position unchanged)
@@ -35,6 +36,7 @@ public static class Native {
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT rect, int size);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
     [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hWnd, int x, int y, int w, int h, bool repaint);
+    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
     [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int value);
 }
 "@
@@ -121,6 +123,28 @@ switch ($Action) {
         }
         Start-Sleep -Milliseconds 200
         Write-Output "pointer at $X,$Y"
+    }
+    "drag" {
+        # -X/-Y start, -Value "x2,y2" end: press, move in 24 steps, release.
+        $rect = Window-Rect
+        $end = $Value.Split(",") | ForEach-Object { [int]$_ }
+        # Injected absolute moves (0..65535 across the primary display): SetCursorPos while the button is held
+        # does not count as pointer movement for WinUI.
+        $sw = [Native]::GetSystemMetrics(0); $sh = [Native]::GetSystemMetrics(1)
+        $ax = { param($px) [int](($rect.Left + $px) * 65535 / $sw) }
+        $ay = { param($py) [int](($rect.Top + $py) * 65535 / $sh) }
+        [Native]::mouse_event(0x8001, (& $ax $X), (& $ay $Y), 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 120
+        [Native]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 150
+        for ($i = 1; $i -le 24; $i++) {
+            $px = [int]($X + ($end[0] - $X) * $i / 24); $py = [int]($Y + ($end[1] - $Y) * $i / 24)
+            [Native]::mouse_event(0x8001, (& $ax $px), (& $ay $py), 0, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 25
+        }
+        Start-Sleep -Milliseconds 80
+        [Native]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+        Write-Output "dragged $X,$Y -> $($end[0]),$($end[1])"
     }
     "dblclick" {
         $rect = Window-Rect

@@ -44,22 +44,7 @@ public sealed partial class TimeSpanToTextConverter : IValueConverter
 /// <summary>Appends NetEase's resize parameter so covers are fetched at the size they are shown.</summary>
 public sealed partial class CoverUrlConverter : IValueConverter
 {
-    // A BitmapImage can be shared by any number of Image controls; without this every recycled list row made a
-    // new one and decoded the cover again while scrolling. Cleared wholesale once it grows past the cap.
-    private static readonly Dictionary<string, BitmapImage> Cache = new();
-    private const int CacheCap = 1024;
-
-    public static BitmapImage? ImageFor(string? url, int size)
-    {
-        if (url is not { Length: > 0 }) return null;
-        var separator = url.Contains('?') ? "&" : "?";
-        var key = $"{url}{separator}param={size}y{size}";
-        if (Cache.TryGetValue(key, out var cached)) return cached;
-        if (Cache.Count >= CacheCap) Cache.Clear();
-        var image = new BitmapImage(new Uri(key));
-        Cache[key] = image;
-        return image;
-    }
+    public static BitmapImage? ImageFor(string? url, int size) => Services.CoverCache.Get(url, size);
 
     public object? Convert(object value, Type targetType, object parameter, string language) =>
         ImageFor(value as string, int.TryParse(parameter as string, out var size) ? size : 300);

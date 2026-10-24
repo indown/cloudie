@@ -68,7 +68,7 @@ cmd_ui() {
   case "$action" in
     invoke) args=(-Name "$1") ;;
     click|rclick|dblclick|resize|hover) args=(-X "$1" -Y "$2") ;;
-    scroll) args=(-X "$1" -Y "$2" -Value "$3") ;;
+    scroll|drag) args=(-X "$1" -Y "$2" -Value "$3") ;;
     select) args=(-Type "$1" -Index "$2" -Value "$3") ;;
     keys|type) args=(-Keys "$1") ;;
     tree) args=(-Depth "${1:-8}") ;;

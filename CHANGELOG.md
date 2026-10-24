@@ -58,6 +58,11 @@
   seconds); a queue with nothing playable no longer cycles forever.
 - App: the home page loaded signed out at start-up and again a second later once the session was restored; the
   theme brushes now live inside the theme dictionaries so controls stop mixing light and dark values.
+- App: scrubbing the scrollbar of a long list queued a cover download for every row passed, so the rows you
+  landed on waited behind hundreds of requests. Row covers now load in `x:Phase` 2 (album text in phase 1),
+  which the ListView skips for rows recycled before they settle, and `CoverCache` keeps decoded covers in a
+  64 MB least-recently-used store (failed downloads are dropped and retried, decode size pinned to the
+  requested size) instead of a counter that wiped everything at 1024 entries.
 - App: long lists (the 1472-song liked list) showed grey blocks while scrolling and stuttered: the ListView's
   scrolling placeholders are off, the row context menu is one shared MenuFlyout instead of nine items plus
   icons built for every realised row, cover BitmapImages are cached by URL so recycled rows do not decode the

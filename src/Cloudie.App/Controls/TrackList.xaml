@@ -66,8 +66,10 @@
                                Visibility="{x:Bind IsCurrent, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibility}}" />
                     <FontIcon Grid.Column="0" Glyph="&#xE767;" FontSize="14" Foreground="{ThemeResource CloudieAccentBrush}"
                               Visibility="{x:Bind IsCurrent, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- x:Phase: the cover is requested only once a row has stayed long enough to reach phase 2, so dragging
+                         the scrollbar past hundreds of rows does not queue hundreds of downloads ahead of the rows you land on. -->
                     <Border Grid.Column="1" Width="44" Height="44" CornerRadius="6" Background="{ThemeResource CloudieSurfaceElevatedBrush}">
-                        <Image Source="{x:Bind CoverUrl, Converter={StaticResource CoverUrl}, ConverterParameter=88}" Stretch="UniformToFill" />
+                        <Image Source="{x:Bind CoverUrl, Converter={StaticResource CoverUrl}, ConverterParameter=88}" Stretch="UniformToFill" x:Phase="2" />
                     </Border>
                     <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -81,7 +83,7 @@
                         </StackPanel>
                         <TextBlock Text="{x:Bind Artists}" Style="{StaticResource SecondaryTextStyle}" />
                     </StackPanel>
-                    <TextBlock Grid.Column="3" Text="{x:Bind Album}" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Text="{x:Bind Album}" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" x:Phase="1" />
                     <Button Grid.Column="4" Style="{StaticResource PlayerIconButtonStyle}" Width="32" Height="32"
                             Click="Like_Click" Tag="{x:Bind}" AutomationProperties.Name="喜欢" ToolTipService.ToolTip="喜欢 / 取消喜欢">
                         <FontIcon Glyph="&#xEB52;" FontSize="14"
