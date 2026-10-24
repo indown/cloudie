@@ -67,7 +67,7 @@ cmd_ui() {
   local args=()
   case "$action" in
     invoke) args=(-Name "$1") ;;
-    click|rclick|resize|hover) args=(-X "$1" -Y "$2") ;;
+    click|rclick|dblclick|resize|hover) args=(-X "$1" -Y "$2") ;;
     scroll) args=(-X "$1" -Y "$2" -Value "$3") ;;
     select) args=(-Type "$1" -Index "$2" -Value "$3") ;;
     keys|type) args=(-Keys "$1") ;;

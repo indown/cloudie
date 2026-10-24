@@ -4,6 +4,7 @@
 #   -Action keys -Keys "^l"              SendKeys to the window (^ Ctrl, % Alt, + Shift, {ENTER}, {ESC}, ...)
 #   -Action type -Keys "周杰伦"          type literal text (no SendKeys escaping)
 #   -Action rclick -X 100 -Y 200         right-click at window-relative physical pixels
+#   -Action dblclick -X 100 -Y 200       double-click there
 #   -Action hover -X 100 -Y 200          move the pointer there without clicking (hover states)
 #   -Action select -Type ComboBox -Index 1 -Value "深色"   open the nth control of that type and pick an item
 #   -Action resize -X 1200 -Y 750        resize the window to physical pixels (position unchanged)
@@ -120,6 +121,13 @@ switch ($Action) {
         }
         Start-Sleep -Milliseconds 200
         Write-Output "pointer at $X,$Y"
+    }
+    "dblclick" {
+        $rect = Window-Rect
+        Click-Point ($rect.Left + $X) ($rect.Top + $Y)
+        Start-Sleep -Milliseconds 80
+        Click-Point ($rect.Left + $X) ($rect.Top + $Y)
+        Write-Output "double-clicked $X,$Y"
     }
     "rclick" {
         $rect = Window-Rect

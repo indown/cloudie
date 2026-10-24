@@ -1,10 +1,14 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using Cloudie.App.Services;
 using Cloudie.App.ViewModels;
 using Cloudie.Core.Netease;
 using Cloudie.Core.Netease.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
 
 namespace Cloudie.App.Controls;
 
@@ -15,7 +19,14 @@ public sealed partial class TrackList : UserControl
     private const string HeartModeMenuText = "心动模式";
 
     public static readonly DependencyProperty RowsProperty = DependencyProperty.Register(
-        nameof(Rows), typeof(ObservableCollection<TrackRow>), typeof(TrackList), new PropertyMetadata(null));
+        nameof(Rows), typeof(ObservableCollection<TrackRow>), typeof(TrackList), new PropertyMetadata(null, (d, e) => ((TrackList)d).OnRowsChanged(e)));
+
+    /// <summary>
+    /// Shows the "定位到正在播放" button when the playing song's row has scrolled out of view. Only for pages
+    /// where this list is the scrolling element (the search page scrolls as a whole, so it leaves this off).
+    /// </summary>
+    public static readonly DependencyProperty CanLocateProperty = DependencyProperty.Register(
+        nameof(CanLocate), typeof(bool), typeof(TrackList), new PropertyMetadata(false, (d, _) => ((TrackList)d).UpdateLocate()));
 
     public static readonly DependencyProperty CanRemoveProperty = DependencyProperty.Register(
         nameof(CanRemove), typeof(bool), typeof(TrackList), new PropertyMetadata(false));
@@ -27,6 +38,12 @@ public sealed partial class TrackList : UserControl
     {
         get => (ObservableCollection<TrackRow>?)GetValue(RowsProperty);
         set => SetValue(RowsProperty, value);
+    }
+
+    public bool CanLocate
+    {
+        get => (bool)GetValue(CanLocateProperty);
+        set => SetValue(CanLocateProperty, value);
     }
 
     /// <summary>True on one of the account's own playlists, where rows may be removed.</summary>
@@ -52,7 +69,76 @@ public sealed partial class TrackList : UserControl
     /// <summary>Raised from the context menu to open the row's artist or album page.</summary>
     public event Action<TrackListRequest>? NavigateRequested;
 
-    public TrackList() => InitializeComponent();
+    private ScrollViewer? _scroller;
+    private bool _locateShown;
+
+    public TrackList()
+    {
+        InitializeComponent();
+        List.Loaded += (_, _) =>
+        {
+            _scroller ??= List.FindDescendant<ScrollViewer>();
+            if (_scroller is not null) _scroller.ViewChanged += (_, _) => UpdateLocate();
+            UpdateLocate();
+        };
+        // MarkCurrent in the view-model runs on the same notification, before this (it subscribed earlier);
+        // deferring once more makes sure the rows carry the new IsCurrent flags.
+        App.Services.Player.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlayerService.CurrentTrack)) DispatcherQueue.TryEnqueue(UpdateLocate);
+        };
+    }
+
+    // MARK: 定位到正在播放
+
+    private void OnRowsChanged(DependencyPropertyChangedEventArgs e)
+    {
+        if (e.OldValue is ObservableCollection<TrackRow> old) old.CollectionChanged -= Rows_CollectionChanged;
+        if (e.NewValue is ObservableCollection<TrackRow> rows) rows.CollectionChanged += Rows_CollectionChanged;
+        DispatcherQueue.TryEnqueue(UpdateLocate);
+    }
+
+    private void Rows_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => DispatcherQueue.TryEnqueue(UpdateLocate);
+
+    private TrackRow? CurrentRow => Rows?.FirstOrDefault(static r => r.IsCurrent);
+
+    /// <summary>The button is wanted when the playing song is in this list but its row is not on screen.</summary>
+    private void UpdateLocate()
+    {
+        var row = CanLocate ? CurrentRow : null;
+        var show = row is not null && !IsInView(row);
+        if (show == _locateShown) return;
+        _locateShown = show;
+        LocateButton.IsHitTestVisible = show;
+        var fade = CompositionTarget.GetCompositorForCurrentThread().CreateScalarKeyFrameAnimation();
+        fade.Target = "Opacity";
+        fade.InsertKeyFrame(1f, show ? 1f : 0f);
+        fade.Duration = TimeSpan.FromMilliseconds(160);
+        LocateButton.StartAnimation(fade);
+    }
+
+    private bool IsInView(TrackRow row)
+    {
+        if (_scroller is null) return true;
+        // A virtualised-away row has no container: it is certainly off screen.
+        if (List.ContainerFromItem(row) is not FrameworkElement container) return false;
+        var top = container.TransformToVisual(_scroller).TransformPoint(new Point(0, 0)).Y;
+        return top + container.ActualHeight > 0 && top < _scroller.ViewportHeight;
+    }
+
+    /// <summary>Brings the playing song's row to the middle of the view.</summary>
+    private async void Locate_Click(object sender, RoutedEventArgs e)
+    {
+        if (CurrentRow is not { } row || _scroller is null) return;
+        List.ScrollIntoView(row, ScrollIntoViewAlignment.Leading);
+        await Task.Delay(60);   // the container exists once the jump has been laid out
+        if (List.ContainerFromItem(row) is FrameworkElement container)
+        {
+            var top = container.TransformToVisual(_scroller).TransformPoint(new Point(0, 0)).Y + _scroller.VerticalOffset;
+            var centred = top - (_scroller.ViewportHeight - container.ActualHeight) / 2;
+            _scroller.ChangeView(null, Math.Max(0, centred), null, disableAnimation: false);
+        }
+    }
 
     private void List_ItemClick(object sender, ItemClickEventArgs e)
     {

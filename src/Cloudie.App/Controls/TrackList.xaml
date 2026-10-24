@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Cloudie.App.ViewModels">
 
+    <Grid>
     <ListView x:Name="List" ItemsSource="{x:Bind Rows, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True"
               ItemClick="List_ItemClick" DoubleTapped="List_DoubleTapped">
         <ListView.ItemContainerStyle>
@@ -89,4 +90,17 @@
             </DataTemplate>
         </ListView.ItemTemplate>
     </ListView>
+
+    <!-- 定位: floats over the list while the playing song's row is scrolled out of view (CanLocate pages only). -->
+    <Button x:Name="LocateButton" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,28,20"
+            Width="44" Height="44" CornerRadius="22" Padding="0" Opacity="0" IsHitTestVisible="False"
+            Background="{ThemeResource CloudieSurfaceElevatedBrush}" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            Translation="0,0,24" Click="Locate_Click"
+            ToolTipService.ToolTip="定位到正在播放" AutomationProperties.Name="定位到正在播放">
+        <Button.Shadow>
+            <ThemeShadow />
+        </Button.Shadow>
+        <FontIcon Glyph="&#xE81D;" FontSize="16" Foreground="{ThemeResource CloudieAccentBrush}" />
+    </Button>
+    </Grid>
 </UserControl>

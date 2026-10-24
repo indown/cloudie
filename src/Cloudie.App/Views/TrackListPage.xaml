@@ -94,7 +94,7 @@
                 </InfoBar.ActionButton>
             </InfoBar>
             <controls:TrackList x:Name="List" Rows="{x:Bind ViewModel.Rows, Mode=OneWay}" CanRemove="{x:Bind ViewModel.IsOwnPlaylist, Mode=OneWay}"
-                                CanHeartMode="{x:Bind ViewModel.CanHeartMode, Mode=OneWay}" />
+                                CanHeartMode="{x:Bind ViewModel.CanHeartMode, Mode=OneWay}" CanLocate="True" />
         </Grid>
     </Grid>
 </Page>
