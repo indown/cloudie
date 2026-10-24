@@ -44,4 +44,7 @@ Notes for anyone (human or agent) continuing this code base.
 
 - Conventional commits (`feat(player): …`, `fix(lyrics): …`), one topic per commit.
 - Chinese UI strings inline for now; localization is a later task.
+- The icon (gold cloud with a cut-out eighth note on a dark tile) is generated, not hand-edited: change
+  `scripts/make-icons.cs` and run `dotnet run scripts/make-icons.cs` (add `--preview` for a small-size contact
+  sheet) to refresh every PNG, `Cloudie.ico` and `Logo.svg` under `src/Cloudie.App/Assets`.
 - Add a test in `tests/` for anything in Core; UI-only changes are verified by running the app.

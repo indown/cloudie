@@ -32,6 +32,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
+        // Unpackaged, the taskbar and Alt+Tab would show the stock window icon without this.
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Cloudie.ico"));
         RestorePlacement();
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         _suggestTimer = DispatcherQueue.CreateTimer();

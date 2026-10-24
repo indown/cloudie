@@ -30,7 +30,7 @@
         <!-- Title bar: the TitleBar control keeps its content clickable and leaves room for the caption buttons. -->
         <TitleBar x:Name="AppTitleBar" Grid.Row="0" Title="Cloudie" IsBackButtonVisible="False" IsPaneToggleButtonVisible="False">
             <TitleBar.IconSource>
-                <ImageIconSource ImageSource="ms-appx:///Assets/Square44x44Logo.png" />
+                <ImageIconSource ImageSource="ms-appx:///Assets/Cloudie.png" />
             </TitleBar.IconSource>
             <TitleBar.Content>
                 <AutoSuggestBox x:Name="SearchBox" PlaceholderText="搜索音乐、歌手、专辑" QueryIcon="Find" Width="360"
