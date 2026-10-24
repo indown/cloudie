@@ -10,6 +10,14 @@ Notes for anyone (human or agent) continuing this code base.
 - `src/Cloudie.App` is WinUI 3 (`net10.0-windows10.0.26100.0`, Windows App SDK 2.x, MSIX). The XAML compiler
   and the packaging targets only run on Windows; `dotnet build` on macOS stops at restore / XAML, so UI changes are
   compiled by the person on the Windows machine. Keep UI code thin and push logic into Core, where it is testable.
+- From WSL on a Windows machine, `scripts/wsl-dev.sh` does the whole loop without Visual Studio: `build` rsyncs the
+  tree to `%USERPROFILE%\work\cloudie` and compiles it with a user-local Windows .NET 10 SDK
+  (`%USERPROFILE%\.dotnet`, installed with `dotnet-install.ps1`; a UNC `\\wsl.localhost` path would not build),
+  `run` starts the Debug exe on the desktop, `shot <name> [delayMs]` captures the window to
+  `/tmp/cloudie-shots/<name>.png`, `ui invoke|click|keys|type|tree` drives it through UI Automation (icon buttons
+  carry `AutomationProperties.Name`, so `ui invoke "下一首"` works), `log` tails the app log, `test` runs the Core
+  tests with the Linux SDK in `~/.dotnet`. `run` kills a running Cloudie first, so the developer's own instance
+  goes down with it.
 - Design reference: Kumone (https://github.com/missuo/kumone, LGPL-3.0). Feature scope and visual style follow it, but
   no code is copied from it: Cloudie is MIT, so keep it that way — reimplement from the NetEase API behaviour, never port.
 
