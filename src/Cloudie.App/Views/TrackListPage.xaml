@@ -69,6 +69,7 @@
         <StackPanel Grid.Row="1" Spacing="8" Visibility="{x:Bind ViewModel.HasAlbums, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
             <TextBlock Text="专辑" Style="{StaticResource SectionTitleStyle}" />
             <GridView ItemsSource="{x:Bind ViewModel.Albums, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Album_ItemClick"
+                      ItemContainerStyle="{StaticResource CardItemStyle}" Margin="-4,0,0,0"
                       ScrollViewer.HorizontalScrollMode="Enabled" ScrollViewer.HorizontalScrollBarVisibility="Auto"
                       ScrollViewer.VerticalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden">
                 <GridView.ItemsPanel>
@@ -78,13 +79,7 @@
                 </GridView.ItemsPanel>
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="models:AlbumSummary">
-                        <StackPanel Width="120" Spacing="6" Margin="0,0,8,8">
-                            <Border Width="120" Height="120" CornerRadius="{StaticResource CardCornerRadius}" Background="{ThemeResource CloudieSurfaceElevatedBrush}">
-                                <Image Source="{x:Bind PicUrl, Converter={StaticResource CoverUrl}, ConverterParameter=240}" Stretch="UniformToFill" />
-                            </Border>
-                            <TextBlock Text="{x:Bind Name}" FontSize="12" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{x:Bind PublishYear}" Style="{StaticResource SecondaryTextStyle}" />
-                        </StackPanel>
+                        <controls:CoverCard Size="120" ImageUrl="{x:Bind PicUrl}" Title="{x:Bind Name}" Subtitle="{x:Bind PublishYear}" />
                     </DataTemplate>
                 </GridView.ItemTemplate>
             </GridView>

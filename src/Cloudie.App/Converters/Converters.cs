@@ -44,13 +44,15 @@ public sealed partial class TimeSpanToTextConverter : IValueConverter
 /// <summary>Appends NetEase's resize parameter so covers are fetched at the size they are shown.</summary>
 public sealed partial class CoverUrlConverter : IValueConverter
 {
-    public object? Convert(object value, Type targetType, object parameter, string language)
+    public static BitmapImage? ImageFor(string? url, int size)
     {
-        if (value is not string { Length: > 0 } url) return null;
-        var size = parameter as string ?? "300";
+        if (url is not { Length: > 0 }) return null;
         var separator = url.Contains('?') ? "&" : "?";
         return new BitmapImage(new Uri($"{url}{separator}param={size}y{size}"));
     }
+
+    public object? Convert(object value, Type targetType, object parameter, string language) =>
+        ImageFor(value as string, int.TryParse(parameter as string, out var size) ? size : 300);
 
     public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
 }

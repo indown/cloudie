@@ -30,6 +30,10 @@
   the navigation pane compacts on narrow windows, the now-playing artwork scales instead of cropping, the minimum
   window size is DPI-aware, and the progress slider no longer snaps back while dragged.
 
+- App: cover cards (`CoverCard`) on the home, search and artist pages: the stock GridView hover box is gone;
+  hovering lifts the cover with a Composition scale animation, dims it slightly and fades in a play disc. The
+  item container keeps keyboard focus visuals only. The stray "空格键" accelerator tooltip over the content is
+  hidden.
 - App: 歌曲预热. Three seconds into a song the next one's URL is resolved in the background (NetEase first,
   then the unlock sources); thirty seconds before the end its stream is opened too, so the switch needs no
   network round trip. The entry follows shuffle / 下一首播放 / FM refills, is dropped when the quality setting

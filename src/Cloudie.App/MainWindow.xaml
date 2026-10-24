@@ -10,7 +10,8 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid x:Name="Root">
+    <!-- Placement Hidden: otherwise WinUI pops a "空格键" tooltip for the Space accelerator over the content. -->
+    <Grid x:Name="Root" KeyboardAcceleratorPlacementMode="Hidden">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />

@@ -78,6 +78,36 @@
         <Setter Property="CornerRadius" Value="20" />
     </Style>
 
+    <!-- Card grids: the item container draws no highlight; the CoverCard inside shows its own hover state. -->
+    <Style x:Key="CardItemStyle" TargetType="GridViewItem">
+        <Setter Property="Margin" Value="0,0,0,6" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="VerticalContentAlignment" Value="Top" />
+        <Setter Property="FocusVisualMargin" Value="-3" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GridViewItem">
+                    <ListViewItemPresenter ContentTransitions="{TemplateBinding ContentTransitions}"
+                                           SelectionCheckMarkVisualEnabled="False"
+                                           PointerOverBackground="Transparent" PressedBackground="Transparent"
+                                           SelectedBackground="Transparent" SelectedPointerOverBackground="Transparent"
+                                           SelectedPressedBackground="Transparent"
+                                           FocusVisualPrimaryBrush="{ThemeResource GridViewItemFocusVisualPrimaryBrush}"
+                                           FocusVisualSecondaryBrush="{ThemeResource GridViewItemFocusVisualSecondaryBrush}"
+                                           FocusBorderBrush="{ThemeResource GridViewItemFocusBorderBrush}"
+                                           FocusSecondaryBorderBrush="{ThemeResource GridViewItemFocusSecondaryBorderBrush}"
+                                           ContentMargin="{TemplateBinding Padding}"
+                                           HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                           VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                           CornerRadius="{StaticResource CardCornerRadius}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="CoverCardStyle" TargetType="Border">
         <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
         <Setter Property="Background" Value="{ThemeResource CloudieSurfaceElevatedBrush}" />

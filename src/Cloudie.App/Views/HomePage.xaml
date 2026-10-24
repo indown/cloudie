@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:Cloudie.Core.Netease.Models"
+    xmlns:controls="using:Cloudie.App.Controls"
     NavigationCacheMode="Enabled">
 
     <ScrollViewer Padding="32,16,32,24">
@@ -17,54 +18,33 @@
                     <TextBlock Text="每日推荐" Style="{StaticResource SectionTitleStyle}" />
                     <HyperlinkButton Content="查看全部" HorizontalAlignment="Right" Click="AllDaily_Click" />
                 </Grid>
-                <GridView ItemsSource="{x:Bind ViewModel.DailySongs, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Daily_ItemClick">
+                <GridView ItemsSource="{x:Bind ViewModel.DailySongs, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Daily_ItemClick"
+                          ItemContainerStyle="{StaticResource CardItemStyle}" Margin="-4,0,0,0">
                     <GridView.ItemTemplate>
                         <DataTemplate x:DataType="models:Track">
-                            <StackPanel Width="150" Spacing="6" Margin="0,0,8,12">
-                                <Border Width="150" Height="150" CornerRadius="{StaticResource CardCornerRadius}" Background="{ThemeResource CloudieSurfaceElevatedBrush}">
-                                    <Image Source="{x:Bind Album.PicUrl, Converter={StaticResource CoverUrl}, ConverterParameter=300}" Stretch="UniformToFill" />
-                                </Border>
-                                <TextBlock Text="{x:Bind Name}" FontSize="13" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{x:Bind ArtistNames}" Style="{StaticResource SecondaryTextStyle}" />
-                            </StackPanel>
+                            <controls:CoverCard ImageUrl="{x:Bind Album.PicUrl}" Title="{x:Bind Name}" Subtitle="{x:Bind ArtistNames}" />
                         </DataTemplate>
                     </GridView.ItemTemplate>
                 </GridView>
             </StackPanel>
 
             <TextBlock Text="推荐歌单" Style="{StaticResource SectionTitleStyle}" />
-            <GridView ItemsSource="{x:Bind ViewModel.RecommendedPlaylists, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Playlist_ItemClick">
+            <GridView ItemsSource="{x:Bind ViewModel.RecommendedPlaylists, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Playlist_ItemClick"
+                      ItemContainerStyle="{StaticResource CardItemStyle}" Margin="-4,0,0,0">
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="models:PlaylistSummary">
-                        <StackPanel Width="170" Spacing="6" Margin="0,0,8,12">
-                            <Grid Width="170" Height="170">
-                                <Border CornerRadius="{StaticResource CardCornerRadius}" Background="{ThemeResource CloudieSurfaceElevatedBrush}">
-                                    <Image Source="{x:Bind CoverUrl, Converter={StaticResource CoverUrl}, ConverterParameter=340}" Stretch="UniformToFill" />
-                                </Border>
-                                <Border Background="#99000000" CornerRadius="10" Padding="6,2" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8">
-                                    <StackPanel Orientation="Horizontal" Spacing="4">
-                                        <FontIcon Glyph="&#xE768;" FontSize="9" Foreground="White" />
-                                        <TextBlock Text="{x:Bind Plays, Converter={StaticResource PlayCount}}" FontSize="11" Foreground="White" />
-                                    </StackPanel>
-                                </Border>
-                            </Grid>
-                            <TextBlock Text="{x:Bind Name}" FontSize="13" TextWrapping="Wrap" MaxLines="2" />
-                        </StackPanel>
+                        <controls:CoverCard Size="170" ImageUrl="{x:Bind CoverUrl}" Title="{x:Bind Name}" TitleLines="2"
+                                            Badge="{x:Bind Plays, Converter={StaticResource PlayCount}}" />
                     </DataTemplate>
                 </GridView.ItemTemplate>
             </GridView>
 
             <TextBlock Text="排行榜" Style="{StaticResource SectionTitleStyle}" />
-            <GridView ItemsSource="{x:Bind ViewModel.Toplists, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Toplist_ItemClick">
+            <GridView ItemsSource="{x:Bind ViewModel.Toplists, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Toplist_ItemClick"
+                      ItemContainerStyle="{StaticResource CardItemStyle}" Margin="-4,0,0,0">
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="models:ToplistItem">
-                        <StackPanel Width="150" Spacing="6" Margin="0,0,8,12">
-                            <Border Width="150" Height="150" CornerRadius="{StaticResource CardCornerRadius}" Background="{ThemeResource CloudieSurfaceElevatedBrush}">
-                                <Image Source="{x:Bind CoverImgUrl, Converter={StaticResource CoverUrl}, ConverterParameter=300}" Stretch="UniformToFill" />
-                            </Border>
-                            <TextBlock Text="{x:Bind Name}" FontSize="13" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{x:Bind UpdateFrequency}" Style="{StaticResource SecondaryTextStyle}" />
-                        </StackPanel>
+                        <controls:CoverCard ImageUrl="{x:Bind CoverImgUrl}" Title="{x:Bind Name}" Subtitle="{x:Bind UpdateFrequency}" />
                     </DataTemplate>
                 </GridView.ItemTemplate>
             </GridView>

@@ -15,7 +15,8 @@
             <InfoBar Severity="Error" IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}" Message="{x:Bind ViewModel.Error, Mode=OneWay}" />
 
             <TextBlock Text="歌手" Style="{StaticResource SectionTitleStyle}" Visibility="{x:Bind HasArtists, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
-            <GridView ItemsSource="{x:Bind ViewModel.Artists, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Artist_ItemClick">
+            <GridView ItemsSource="{x:Bind ViewModel.Artists, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Artist_ItemClick"
+                      ItemContainerStyle="{StaticResource CardItemStyle}" Margin="-4,0,0,0">
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="models:ArtistSummary">
                         <StackPanel Width="120" Spacing="6" Margin="0,0,8,12" HorizontalAlignment="Center">
@@ -29,16 +30,11 @@
             </GridView>
 
             <TextBlock Text="专辑" Style="{StaticResource SectionTitleStyle}" Visibility="{x:Bind HasAlbums, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
-            <GridView ItemsSource="{x:Bind ViewModel.Albums, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Album_ItemClick">
+            <GridView ItemsSource="{x:Bind ViewModel.Albums, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Album_ItemClick"
+                      ItemContainerStyle="{StaticResource CardItemStyle}" Margin="-4,0,0,0">
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="models:AlbumSummary">
-                        <StackPanel Width="150" Spacing="6" Margin="0,0,8,12">
-                            <Border Width="150" Height="150" CornerRadius="{StaticResource CardCornerRadius}" Background="{ThemeResource CloudieSurfaceElevatedBrush}">
-                                <Image Source="{x:Bind PicUrl, Converter={StaticResource CoverUrl}, ConverterParameter=300}" Stretch="UniformToFill" />
-                            </Border>
-                            <TextBlock Text="{x:Bind Name}" FontSize="13" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{x:Bind ArtistName}" Style="{StaticResource SecondaryTextStyle}" />
-                        </StackPanel>
+                        <controls:CoverCard ImageUrl="{x:Bind PicUrl}" Title="{x:Bind Name}" Subtitle="{x:Bind ArtistName}" />
                     </DataTemplate>
                 </GridView.ItemTemplate>
             </GridView>
@@ -47,15 +43,12 @@
             <controls:TrackList x:Name="List" Rows="{x:Bind ViewModel.Songs, Mode=OneWay}" />
 
             <TextBlock Text="歌单" Style="{StaticResource SectionTitleStyle}" Visibility="{x:Bind HasPlaylists, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
-            <GridView ItemsSource="{x:Bind ViewModel.Playlists, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Playlist_ItemClick">
+            <GridView ItemsSource="{x:Bind ViewModel.Playlists, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Playlist_ItemClick"
+                      ItemContainerStyle="{StaticResource CardItemStyle}" Margin="-4,0,0,0">
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="models:PlaylistSummary">
-                        <StackPanel Width="150" Spacing="6" Margin="0,0,8,12">
-                            <Border Width="150" Height="150" CornerRadius="{StaticResource CardCornerRadius}" Background="{ThemeResource CloudieSurfaceElevatedBrush}">
-                                <Image Source="{x:Bind CoverUrl, Converter={StaticResource CoverUrl}, ConverterParameter=300}" Stretch="UniformToFill" />
-                            </Border>
-                            <TextBlock Text="{x:Bind Name}" FontSize="13" TextWrapping="Wrap" MaxLines="2" />
-                        </StackPanel>
+                        <controls:CoverCard ImageUrl="{x:Bind CoverUrl}" Title="{x:Bind Name}" TitleLines="2"
+                                            Badge="{x:Bind Plays, Converter={StaticResource PlayCount}}" />
                     </DataTemplate>
                 </GridView.ItemTemplate>
             </GridView>
