@@ -71,6 +71,9 @@ public sealed partial class TrackList : UserControl
 
     private ScrollViewer? _scroller;
     private bool _locateShown;
+    /// <summary>The row whose context menu is open; the menu is shared by all rows.</summary>
+    private TrackRow? _menuRow;
+    private TrackRow? _currentRow;
 
     public TrackList()
     {
@@ -85,7 +88,7 @@ public sealed partial class TrackList : UserControl
         // deferring once more makes sure the rows carry the new IsCurrent flags.
         App.Services.Player.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(PlayerService.CurrentTrack)) DispatcherQueue.TryEnqueue(UpdateLocate);
+            if (e.PropertyName == nameof(PlayerService.CurrentTrack)) DispatcherQueue.TryEnqueue(RefreshCurrentRow);
         };
     }
 
@@ -95,17 +98,22 @@ public sealed partial class TrackList : UserControl
     {
         if (e.OldValue is ObservableCollection<TrackRow> old) old.CollectionChanged -= Rows_CollectionChanged;
         if (e.NewValue is ObservableCollection<TrackRow> rows) rows.CollectionChanged += Rows_CollectionChanged;
-        DispatcherQueue.TryEnqueue(UpdateLocate);
+        DispatcherQueue.TryEnqueue(RefreshCurrentRow);
     }
 
-    private void Rows_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => DispatcherQueue.TryEnqueue(UpdateLocate);
+    private void Rows_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => DispatcherQueue.TryEnqueue(RefreshCurrentRow);
 
-    private TrackRow? CurrentRow => Rows?.FirstOrDefault(static r => r.IsCurrent);
+    /// <summary>Scans the rows once per change of song or rows; the scroll handler then only looks at this one.</summary>
+    private void RefreshCurrentRow()
+    {
+        _currentRow = Rows?.FirstOrDefault(static r => r.IsCurrent);
+        UpdateLocate();
+    }
 
     /// <summary>The button is wanted when the playing song is in this list but its row is not on screen.</summary>
     private void UpdateLocate()
     {
-        var row = CanLocate ? CurrentRow : null;
+        var row = CanLocate ? _currentRow : null;
         var show = row is not null && !IsInView(row);
         if (show == _locateShown) return;
         _locateShown = show;
@@ -129,7 +137,7 @@ public sealed partial class TrackList : UserControl
     /// <summary>Brings the playing song's row to the middle of the view.</summary>
     private async void Locate_Click(object sender, RoutedEventArgs e)
     {
-        if (CurrentRow is not { } row || _scroller is null) return;
+        if (_currentRow is not { } row || _scroller is null) return;
         List.ScrollIntoView(row, ScrollIntoViewAlignment.Leading);
         await Task.Delay(60);   // the container exists once the jump has been laid out
         if (List.ContainerFromItem(row) is FrameworkElement container)
@@ -152,44 +160,53 @@ public sealed partial class TrackList : UserControl
 
     private void PlayMenu_Click(object sender, RoutedEventArgs e)
     {
-        if (RowOf(sender) is { } row) PlayRequested?.Invoke(row);
+        if (_menuRow is { } row) PlayRequested?.Invoke(row);
     }
 
     private void PlayNextMenu_Click(object sender, RoutedEventArgs e)
     {
-        if (RowOf(sender) is { } row) PlayNextRequested?.Invoke(row);
+        if (_menuRow is { } row) PlayNextRequested?.Invoke(row);
     }
 
+    /// <summary>The heart button in the row (its Tag is the row).</summary>
     private void Like_Click(object sender, RoutedEventArgs e)
     {
         if (RowOf(sender) is { } row) LikeRequested?.Invoke(row);
     }
 
+    private void LikeMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (_menuRow is { } row) LikeRequested?.Invoke(row);
+    }
+
     private void ArtistMenu_Click(object sender, RoutedEventArgs e)
     {
-        if (RowOf(sender) is { } row && TrackListRequest.ForArtistOf(row.Track) is { } request) NavigateRequested?.Invoke(request);
+        if (_menuRow is { } row && TrackListRequest.ForArtistOf(row.Track) is { } request) NavigateRequested?.Invoke(request);
     }
 
     private void AlbumMenu_Click(object sender, RoutedEventArgs e)
     {
-        if (RowOf(sender) is { } row && TrackListRequest.ForAlbumOf(row.Track) is { } request) NavigateRequested?.Invoke(request);
+        if (_menuRow is { } row && TrackListRequest.ForAlbumOf(row.Track) is { } request) NavigateRequested?.Invoke(request);
     }
 
     private void RemoveMenu_Click(object sender, RoutedEventArgs e)
     {
-        if (RowOf(sender) is { } row) RemoveRequested?.Invoke(row);
+        if (_menuRow is { } row) RemoveRequested?.Invoke(row);
     }
 
     private void HeartModeMenu_Click(object sender, RoutedEventArgs e)
     {
-        if (RowOf(sender) is { } row) HeartModeRequested?.Invoke(row);
+        if (_menuRow is { } row) HeartModeRequested?.Invoke(row);
     }
 
-    /// <summary>Fills the "添加到歌单" submenu with the account's playlists and shows "移除" only where allowed.</summary>
+    /// <summary>
+    /// Remembers which row opened the shared menu, fills the "添加到歌单" submenu with the account's playlists
+    /// and shows "移除" / "心动模式" only where allowed.
+    /// </summary>
     private void RowMenu_Opening(object sender, object e)
     {
         if (sender is not MenuFlyout flyout) return;
-        var row = (flyout.Target as FrameworkElement)?.DataContext as TrackRow;
+        var row = _menuRow = (flyout.Target as FrameworkElement)?.DataContext as TrackRow;
         foreach (var item in flyout.Items)
         {
             switch (item)

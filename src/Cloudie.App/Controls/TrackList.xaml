@@ -5,9 +5,43 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Cloudie.App.ViewModels">
 
+    <!-- One context menu for every row (a per-row MenuFlyout cost 9 items plus icons per realised container).
+         Opening reads the row from the flyout's Target. -->
+    <UserControl.Resources>
+        <MenuFlyout x:Key="RowMenu" Opening="RowMenu_Opening">
+            <MenuFlyoutItem Text="播放" Click="PlayMenu_Click">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE768;" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="下一首播放" Click="PlayNextMenu_Click">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8B4;" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="喜欢 / 取消喜欢" Click="LikeMenu_Click">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEB51;" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutSeparator />
+            <MenuFlyoutItem Text="查看歌手" Click="ArtistMenu_Click">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE77B;" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="查看专辑" Click="AlbumMenu_Click">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE93C;" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutSeparator />
+            <MenuFlyoutSubItem Text="添加到歌单" Tag="add-to-playlist">
+                <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE710;" /></MenuFlyoutSubItem.Icon>
+            </MenuFlyoutSubItem>
+            <MenuFlyoutItem Text="从歌单中移除" Click="RemoveMenu_Click" Visibility="Collapsed">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="心动模式" Click="HeartModeMenu_Click" Visibility="Collapsed">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEB52;" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+        </MenuFlyout>
+    </UserControl.Resources>
+
     <Grid>
+    <!-- ShowsScrollingPlaceholders off: the grey blocks it paints while a long list scrolls fast look like a veil. -->
     <ListView x:Name="List" ItemsSource="{x:Bind Rows, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True"
-              ItemClick="List_ItemClick" DoubleTapped="List_DoubleTapped">
+              ItemClick="List_ItemClick" DoubleTapped="List_DoubleTapped" ShowsScrollingPlaceholders="False">
         <ListView.ItemContainerStyle>
             <Style TargetType="ListViewItem">
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -18,7 +52,7 @@
         <ListView.ItemTemplate>
             <DataTemplate x:DataType="vm:TrackRow">
                 <!-- Transparent (not null) background: otherwise only the text and image parts take the right-click. -->
-                <Grid ColumnSpacing="12" Opacity="{x:Bind Opacity}" Background="Transparent">
+                <Grid ColumnSpacing="12" Opacity="{x:Bind Opacity}" Background="Transparent" ContextFlyout="{StaticResource RowMenu}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="44" />
@@ -56,36 +90,6 @@
                     </Button>
                     <TextBlock Grid.Column="5" Text="{x:Bind Duration, Converter={StaticResource TimeSpanToText}}"
                                Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" HorizontalAlignment="Right" />
-                    <Grid.ContextFlyout>
-                        <MenuFlyout Opening="RowMenu_Opening">
-                            <MenuFlyoutItem Text="播放" Click="PlayMenu_Click" Tag="{x:Bind}">
-                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE768;" /></MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem Text="下一首播放" Click="PlayNextMenu_Click" Tag="{x:Bind}">
-                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8B4;" /></MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem Text="喜欢 / 取消喜欢" Click="Like_Click" Tag="{x:Bind}">
-                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEB51;" /></MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutSeparator />
-                            <MenuFlyoutItem Text="查看歌手" Click="ArtistMenu_Click" Tag="{x:Bind}">
-                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE77B;" /></MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem Text="查看专辑" Click="AlbumMenu_Click" Tag="{x:Bind}">
-                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE93C;" /></MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutSeparator />
-                            <MenuFlyoutSubItem Text="添加到歌单" Tag="add-to-playlist">
-                                <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE710;" /></MenuFlyoutSubItem.Icon>
-                            </MenuFlyoutSubItem>
-                            <MenuFlyoutItem Text="从歌单中移除" Click="RemoveMenu_Click" Tag="{x:Bind}" Visibility="Collapsed">
-                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" /></MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem Text="心动模式" Click="HeartModeMenu_Click" Tag="{x:Bind}" Visibility="Collapsed">
-                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEB52;" /></MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                        </MenuFlyout>
-                    </Grid.ContextFlyout>
                 </Grid>
             </DataTemplate>
         </ListView.ItemTemplate>

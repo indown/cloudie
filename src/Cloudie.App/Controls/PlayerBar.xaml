@@ -110,7 +110,7 @@
                                 <Run Text="播放队列" /><Run Text=" · " /><Run Text="{x:Bind Player.Queue.Count, Mode=OneWay}" /><Run Text=" 首" />
                             </TextBlock>
                             <!-- The selection is the song playing now; clicking a row plays it, which moves the selection along. -->
-                            <ListView x:Name="QueueList" ItemsSource="{x:Bind Player.Queue.Items, Mode=OneWay}" MaxHeight="420"
+                            <ListView x:Name="QueueList" ItemsSource="{x:Bind Player.Queue.Items, Mode=OneWay}" MaxHeight="420" ShowsScrollingPlaceholders="False"
                                       SelectionMode="Single" SelectedItem="{x:Bind Player.CurrentTrack, Mode=OneWay}"
                                       IsItemClickEnabled="True" ItemClick="Queue_ItemClick" AutomationProperties.Name="播放队列">
                                 <ListView.ItemTemplate>

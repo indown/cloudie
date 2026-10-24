@@ -58,6 +58,10 @@
   seconds); a queue with nothing playable no longer cycles forever.
 - App: the home page loaded signed out at start-up and again a second later once the session was restored; the
   theme brushes now live inside the theme dictionaries so controls stop mixing light and dark values.
+- App: long lists (the 1472-song liked list) showed grey blocks while scrolling and stuttered: the ListView's
+  scrolling placeholders are off, the row context menu is one shared MenuFlyout instead of nine items plus
+  icons built for every realised row, cover BitmapImages are cached by URL so recycled rows do not decode the
+  same cover again, and the locate button's scroll check no longer scans every row.
 - App: Media Foundation reports one playback failure several times; each report skipped a song, so one bad
   stream threw away the next three as well. A failure is now handled once per loaded source (and never
   attributed to the source that replaced it), is logged with its error kind and HRESULT, is never scrobbled,
