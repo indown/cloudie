@@ -29,7 +29,8 @@ public sealed class NeteaseClient : IDisposable
         PropertyNameCaseInsensitive = true,
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
         ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true
+        AllowTrailingCommas = true,
+        Converters = { new LenientNumberConverter() }
     };
 
     private readonly HttpClient _http;

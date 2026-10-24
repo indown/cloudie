@@ -50,6 +50,28 @@ public class ModelsTests
     }
 
     [Fact]
+    public void Counts_sent_as_floats_strings_or_booleans_still_decode()
+    {
+        // personalized/playlist really answers with "playCount": 1.2345678E7; a strict long reader rejected the whole page.
+        var response = NeteaseClient.Decode<PersonalizedPlaylistsResponse>("""
+            {"code":200,"result":[{"id":1,"name":"A","playCount":1.2345678E7,"trackCount":"42"},{"id":"2","name":"B","playCount":null,"trackCount":7.9}]}
+            """);
+        Assert.Equal(12345678, response.Result[0].Plays);
+        Assert.Equal(42, response.Result[0].TrackCount);
+        Assert.Equal(2, response.Result[1].Id);
+        Assert.Equal(0, response.Result[1].Plays);
+        Assert.Equal(7, response.Result[1].TrackCount);
+        var privilege = NeteaseClient.Decode<TrackPrivilege>("""{"id":1,"fee":true,"pl":"","st":-200}""");
+        Assert.Equal(1, privilege.Fee);
+        Assert.Equal(0, privilege.Pl);
+        Assert.Equal(-200, privilege.St);
+        Assert.Throws<System.Text.Json.JsonException>(() => NeteaseClient.Decode<TrackPrivilege>("""{"id":[1]}"""));
+        // Writing with the same options still produces plain numbers.
+        Assert.Equal("""{"id":5,"name":"","picUrl":null}""",
+            System.Text.Json.JsonSerializer.Serialize(new AlbumRef { Id = 5 }, NeteaseClient.ResponseOptions));
+    }
+
+    [Fact]
     public void Song_url_and_qr_states_decode()
     {
         var url = NeteaseClient.Decode<SongUrlResponse>("""{"code":200,"data":[{"id":5,"url":null,"br":0,"size":0,"code":-110,"freeTrialInfo":{"start":30,"end":60}}]}""").Data.Single();
