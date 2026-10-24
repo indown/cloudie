@@ -20,6 +20,22 @@ public sealed partial class HomeViewModel : ObservableObject
     [ObservableProperty] public partial string Greeting { get; private set; } = "推荐";
     [ObservableProperty] public partial bool HasDailySongs { get; private set; }
 
+    /// <summary>
+    /// The first load waits for the stored session to come back, so the page is built once, signed in,
+    /// instead of once signed out and again a second later. A slow restore is given a few seconds; after
+    /// that the page loads signed out and refreshes once the session lands.
+    /// </summary>
+    public async Task LoadInitialAsync()
+    {
+        IsLoading = true;
+        var restore = _account.Restoring;
+        await Task.WhenAny(restore, Task.Delay(TimeSpan.FromSeconds(8)));
+        await LoadAsync();
+        if (restore.IsCompleted) return;
+        await restore;
+        if (_account.IsLoggedIn) await LoadAsync();
+    }
+
     public async Task LoadAsync()
     {
         IsLoading = true;

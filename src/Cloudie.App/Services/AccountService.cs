@@ -19,8 +19,13 @@ public sealed partial class AccountService(NeteaseApi api, LogService log) : Obs
 
     public event EventHandler? LikedSongsChanged;
 
+    /// <summary>The start-up restore of a stored session; pages that want to load signed in await it first.</summary>
+    public Task Restoring { get; private set; } = Task.CompletedTask;
+
     /// <summary>Reuses a stored session at start-up; a dead cookie just leaves the app signed out.</summary>
-    public async Task RestoreAsync()
+    public Task RestoreAsync() => Restoring = RestoreCoreAsync();
+
+    private async Task RestoreCoreAsync()
     {
         if (!api.Client.IsLoggedIn) return;
         try

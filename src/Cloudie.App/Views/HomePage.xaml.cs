@@ -11,21 +11,19 @@ public sealed partial class HomePage : Page
     public HomeViewModel ViewModel { get; } = new();
     private bool _loaded;
 
-    public HomePage()
-    {
-        InitializeComponent();
-        App.Services.Account.PropertyChanged += (sender, e) =>
-        {
-            if (e.PropertyName == nameof(Services.AccountService.Profile)) _ = ViewModel.LoadAsync();
-        };
-    }
+    public HomePage() => InitializeComponent();
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         if (_loaded) return;
         _loaded = true;
-        await ViewModel.LoadAsync();
+        await ViewModel.LoadInitialAsync();
+        // From here on a sign-in or sign-out rebuilds the page.
+        App.Services.Account.PropertyChanged += (sender, args) =>
+        {
+            if (args.PropertyName == nameof(Services.AccountService.Profile)) _ = ViewModel.LoadAsync();
+        };
     }
 
     private void Daily_ItemClick(object sender, ItemClickEventArgs e)
