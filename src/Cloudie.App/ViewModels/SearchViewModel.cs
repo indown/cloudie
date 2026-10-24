@@ -53,7 +53,7 @@ public sealed partial class SearchViewModel : ObservableObject
         }
         catch (Exception error)
         {
-            Error = error.Message;
+            Error = ErrorText.Describe(error);
         }
         finally
         {

@@ -14,7 +14,8 @@
 
         <!-- Now playing summary; click opens the immersive page. -->
         <Button Grid.Column="0" Background="Transparent" BorderThickness="0" Padding="0" HorizontalAlignment="Left"
-                HorizontalContentAlignment="Left" Click="Cover_Click" IsEnabled="{x:Bind Player.HasCurrentTrack, Mode=OneWay}">
+                HorizontalContentAlignment="Left" Click="Cover_Click" IsEnabled="{x:Bind Player.HasCurrentTrack, Mode=OneWay}"
+                AutomationProperties.Name="正在播放" ToolTipService.ToolTip="打开播放页">
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <Border Width="56" Height="56" CornerRadius="{StaticResource CoverCornerRadius}" Background="{ThemeResource CloudieSurfaceBrush}">
                     <Image Source="{x:Bind Player.CurrentTrack.Album.PicUrl, Mode=OneWay, Converter={StaticResource CoverUrl}, ConverterParameter=112}" Stretch="UniformToFill" />
@@ -46,21 +47,34 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4">
-                <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Shuffle_Click" ToolTipService.ToolTip="随机播放">
-                    <FontIcon Glyph="&#xE8B1;" FontSize="14" Foreground="{x:Bind ShuffleBrush, Mode=OneWay}" />
+                <!-- On/off states are two icons with theme brushes, so they follow the window theme (not the app's). -->
+                <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Shuffle_Click" ToolTipService.ToolTip="随机播放" AutomationProperties.Name="随机播放">
+                    <Grid>
+                        <FontIcon Glyph="&#xE8B1;" FontSize="14" Foreground="{ThemeResource CloudieAccentBrush}"
+                                  Visibility="{x:Bind Player.IsShuffled, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                        <FontIcon Glyph="&#xE8B1;" FontSize="14" Foreground="{ThemeResource CloudieTextSecondaryBrush}"
+                                  Visibility="{x:Bind Player.IsShuffled, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibility}}" />
+                    </Grid>
                 </Button>
-                <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Previous_Click" ToolTipService.ToolTip="上一首">
+                <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Previous_Click" ToolTipService.ToolTip="上一首" AutomationProperties.Name="上一首">
                     <FontIcon Glyph="&#xE892;" FontSize="16" />
                 </Button>
                 <Button Style="{StaticResource PlayerIconButtonStyle}" Width="48" Height="48" CornerRadius="24"
-                        Background="{ThemeResource CloudieTextPrimaryBrush}" Click="PlayPause_Click">
+                        Background="{ThemeResource CloudieTextPrimaryBrush}" Click="PlayPause_Click"
+                        AutomationProperties.Name="{x:Bind PlayPauseLabel, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind PlayPauseLabel, Mode=OneWay}">
                     <FontIcon Glyph="{x:Bind PlayGlyph, Mode=OneWay}" FontSize="18" Foreground="{ThemeResource CloudieSurfaceBrush}" />
                 </Button>
-                <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Next_Click" ToolTipService.ToolTip="下一首">
+                <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Next_Click" ToolTipService.ToolTip="下一首" AutomationProperties.Name="下一首">
                     <FontIcon Glyph="&#xE893;" FontSize="16" />
                 </Button>
-                <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Repeat_Click" ToolTipService.ToolTip="循环模式">
-                    <FontIcon Glyph="{x:Bind RepeatGlyph, Mode=OneWay}" FontSize="14" Foreground="{x:Bind RepeatBrush, Mode=OneWay}" />
+                <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Repeat_Click" ToolTipService.ToolTip="{x:Bind RepeatLabel, Mode=OneWay}"
+                        AutomationProperties.Name="{x:Bind RepeatLabel, Mode=OneWay}">
+                    <Grid>
+                        <FontIcon Glyph="{x:Bind RepeatGlyph, Mode=OneWay}" FontSize="14" Foreground="{ThemeResource CloudieAccentBrush}"
+                                  Visibility="{x:Bind IsRepeatOn, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                        <FontIcon Glyph="&#xE8EE;" FontSize="14" Foreground="{ThemeResource CloudieTextSecondaryBrush}"
+                                  Visibility="{x:Bind IsRepeatOn, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibility}}" />
+                    </Grid>
                 </Button>
             </StackPanel>
             <Grid Grid.Row="1" ColumnSpacing="8">
@@ -71,8 +85,9 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{x:Bind Player.Position, Mode=OneWay, Converter={StaticResource TimeSpanToText}}" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" HorizontalAlignment="Right" />
                 <Slider x:Name="ProgressSlider" Grid.Column="1" Minimum="0" Maximum="{x:Bind DurationSeconds, Mode=OneWay}"
-                        Value="{x:Bind PositionSeconds, Mode=OneWay}" IsThumbToolTipEnabled="False"
-                        ManipulationMode="All" PointerCaptureLost="ProgressSlider_PointerCaptureLost" VerticalAlignment="Center" />
+                        Value="{x:Bind PositionSeconds, Mode=OneWay}" IsThumbToolTipEnabled="False" StepFrequency="1"
+                        ManipulationMode="All" PointerCaptureLost="ProgressSlider_PointerCaptureLost"
+                        KeyUp="ProgressSlider_KeyUp" VerticalAlignment="Center" AutomationProperties.Name="播放进度" />
                 <TextBlock Grid.Column="2" Text="{x:Bind Player.Duration, Mode=OneWay, Converter={StaticResource TimeSpanToText}}" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
             </Grid>
         </Grid>
@@ -80,24 +95,31 @@
         <!-- Volume, lyrics, queue -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4" VerticalAlignment="Center">
             <FontIcon Glyph="&#xE767;" FontSize="14" Foreground="{ThemeResource CloudieTextSecondaryBrush}" />
-            <Slider Width="110" Minimum="0" Maximum="100" Value="{x:Bind VolumePercent, Mode=TwoWay}" VerticalAlignment="Center" />
-            <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Lyrics_Click" ToolTipService.ToolTip="歌词">
+            <Slider Width="110" Minimum="0" Maximum="100" Value="{x:Bind VolumePercent, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="音量" />
+            <Button Style="{StaticResource PlayerIconButtonStyle}" Click="Lyrics_Click" ToolTipService.ToolTip="歌词" AutomationProperties.Name="歌词">
                 <FontIcon Glyph="&#xE8D2;" FontSize="14" />
             </Button>
-            <Button Style="{StaticResource PlayerIconButtonStyle}" ToolTipService.ToolTip="播放队列">
+            <Button Style="{StaticResource PlayerIconButtonStyle}" ToolTipService.ToolTip="播放队列" AutomationProperties.Name="播放队列">
                 <Button.Flyout>
-                    <Flyout Placement="Top">
-                        <ListView ItemsSource="{x:Bind Player.Queue.Items, Mode=OneWay}" Width="320" MaxHeight="420"
-                                  SelectionMode="None" IsItemClickEnabled="True" ItemClick="Queue_ItemClick">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Padding="0,4">
-                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding ArtistNames}" Style="{StaticResource SecondaryTextStyle}" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
+                    <Flyout Placement="Top" Opened="QueueFlyout_Opened">
+                        <StackPanel Spacing="8" Width="320">
+                            <TextBlock FontWeight="SemiBold">
+                                <Run Text="播放队列" /><Run Text=" · " /><Run Text="{x:Bind Player.Queue.Count, Mode=OneWay}" /><Run Text=" 首" />
+                            </TextBlock>
+                            <!-- The selection is the song playing now; clicking a row plays it, which moves the selection along. -->
+                            <ListView x:Name="QueueList" ItemsSource="{x:Bind Player.Queue.Items, Mode=OneWay}" MaxHeight="420"
+                                      SelectionMode="Single" SelectedItem="{x:Bind Player.CurrentTrack, Mode=OneWay}"
+                                      IsItemClickEnabled="True" ItemClick="Queue_ItemClick" AutomationProperties.Name="播放队列">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Padding="0,4">
+                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding ArtistNames}" Style="{StaticResource SecondaryTextStyle}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </StackPanel>
                     </Flyout>
                 </Button.Flyout>
                 <FontIcon Glyph="&#xE8FD;" FontSize="14" />

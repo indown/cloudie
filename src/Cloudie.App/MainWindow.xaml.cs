@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Cloudie.App.Controls;
 using Cloudie.App.ViewModels;
 using Cloudie.App.Views;
@@ -67,22 +68,31 @@ public sealed partial class MainWindow : Window
 
     // MARK: Window placement
 
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    /// <summary>AppWindow sizes are physical pixels; the limits above are meant in logical ones.</summary>
+    private double Scale => GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
+
     /// <summary>Last size and position, kept on a display that still exists; first run gets a sensible default.</summary>
     private void RestorePlacement()
     {
+        var scale = Scale;
+        var minWidth = (int)(MinWidth * scale);
+        var minHeight = (int)(MinHeight * scale);
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.PreferredMinimumWidth = MinWidth;
-            presenter.PreferredMinimumHeight = MinHeight;
+            presenter.PreferredMinimumWidth = minWidth;
+            presenter.PreferredMinimumHeight = minHeight;
         }
         var saved = App.Services.Settings.WindowPlacement;
         if (saved is null)
         {
-            AppWindow.Resize(new SizeInt32(1280, 820));
+            AppWindow.Resize(new SizeInt32((int)(1280 * scale), (int)(820 * scale)));
             return;
         }
         var area = DisplayArea.GetFromRect(new RectInt32(saved.X, saved.Y, saved.Width, saved.Height), DisplayAreaFallback.Nearest).WorkArea;
-        var fit = saved.FitInto(area.X, area.Y, area.Width, area.Height, MinWidth, MinHeight);
+        var fit = saved.FitInto(area.X, area.Y, area.Width, area.Height, minWidth, minHeight);
         AppWindow.MoveAndResize(new RectInt32(fit.X, fit.Y, fit.Width, fit.Height));
         if (saved.IsMaximized && AppWindow.Presenter is OverlappedPresenter overlapped) overlapped.Maximize();
     }
@@ -186,8 +196,9 @@ public sealed partial class MainWindow : Window
             },
             _ => null
         };
-        if (target is null) return;
+        // Search, album and artist pages have no row: nothing stays highlighted.
         if (target is NavigationEntry entry) _selectedEntry = entry;
+        else if (target is null) _selectedEntry = null;
         Select(target);
     }
 

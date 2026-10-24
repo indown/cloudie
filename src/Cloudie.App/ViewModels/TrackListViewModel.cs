@@ -52,6 +52,7 @@ public sealed partial class TrackListViewModel : ObservableObject
     private readonly LogService _log = App.Services.Log;
     private readonly List<Track> _tracks = [];
     private long _sourceId;
+    private TrackListRequest? _request;
 
     public ObservableCollection<TrackRow> Rows { get; } = [];
     /// <summary>Artist pages also list the artist's albums.</summary>
@@ -93,12 +94,16 @@ public sealed partial class TrackListViewModel : ObservableObject
 
     public async Task LoadAsync(TrackListRequest request)
     {
+        _request = request;
         IsLoading = true;
         Error = null;
         Title = request.Title ?? string.Empty;
         _sourceId = request.Kind == TrackListKind.DailySongs ? 0 : request.Id;
         Albums.Clear();
         HasAlbums = false;
+        Subtitle = null;
+        Description = null;
+        CoverUrl = null;
         _playlistId = request.Kind == TrackListKind.Playlist ? request.Id : 0;
         IsOwnPlaylist = false;
         CanSubscribe = false;
@@ -119,16 +124,18 @@ public sealed partial class TrackListViewModel : ObservableObject
                     await LoadArtistAsync(request.Id);
                     break;
                 case TrackListKind.DailySongs:
-                    SetTracks(await _api.GetDailyRecommendSongsAsync(), null);
+                    var daily = await _api.GetDailyRecommendSongsAsync();
+                    SetTracks(daily, null);
                     Title = "每日推荐";
                     Subtitle = DateTime.Now.ToString("M月d日");
+                    CoverUrl = daily.FirstOrDefault()?.Album.PicUrl;
                     break;
             }
         }
         catch (Exception error)
         {
             _log.Error($"track list {request}: {error}");
-            Error = error is NeteaseApiException { NeedsLogin: true } ? "需要登录后查看" : error.Message;
+            Error = ErrorText.Describe(error);
         }
         finally
         {
@@ -221,6 +228,10 @@ public sealed partial class TrackListViewModel : ObservableObject
         var currentId = _player.CurrentTrack?.Id;
         foreach (var row in Rows) row.IsCurrent = row.Track.Id == currentId;
     }
+
+    /// <summary>The "重试" button of the error bar.</summary>
+    [RelayCommand]
+    private Task Retry() => _request is null ? Task.CompletedTask : LoadAsync(_request);
 
     [RelayCommand]
     private Task PlayAll() => _tracks.Count == 0 ? Task.CompletedTask : _player.PlayAsync(_tracks, 0, _sourceId);

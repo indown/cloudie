@@ -32,20 +32,28 @@
 
             <!-- Collapse chevron beside the window buttons -->
             <Button Grid.ColumnSpan="2" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-36,-8,0,0"
-                    Width="32" Height="32" CornerRadius="16" Background="#1FFFFFFF" BorderThickness="0" Click="Collapse_Click">
+                    Width="32" Height="32" CornerRadius="16" Background="#1FFFFFFF" BorderThickness="0" Click="Collapse_Click"
+                    AutomationProperties.Name="收起" ToolTipService.ToolTip="收起">
                 <FontIcon Glyph="&#xE70D;" FontSize="12" Foreground="#D9FFFFFF" />
             </Button>
 
-            <!-- Artwork + title -->
-            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="24" MaxWidth="520">
-                <Border CornerRadius="16" MaxWidth="480" HorizontalAlignment="Center">
-                    <Border.Shadow>
-                        <ThemeShadow />
-                    </Border.Shadow>
-                    <Image x:Name="Artwork" Stretch="UniformToFill"
-                           Source="{x:Bind Player.CurrentTrack.Album.PicUrl, Mode=OneWay, Converter={StaticResource CoverUrl}, ConverterParameter=800}" />
-                </Border>
-                <StackPanel Spacing="6">
+            <!-- Artwork + title. The card is a fixed 480 px square inside a Viewbox, so a short window shrinks it
+                 rather than cropping it; the text keeps its size below. -->
+            <Grid Grid.Column="0" RowSpacing="24" MaxWidth="520" VerticalAlignment="Center">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Viewbox StretchDirection="DownOnly" MaxWidth="480" MaxHeight="480" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                    <Border Width="480" Height="480" CornerRadius="16">
+                        <Border.Shadow>
+                            <ThemeShadow />
+                        </Border.Shadow>
+                        <Image x:Name="Artwork" Stretch="UniformToFill"
+                               Source="{x:Bind Player.CurrentTrack.Album.PicUrl, Mode=OneWay, Converter={StaticResource CoverUrl}, ConverterParameter=800}" />
+                    </Border>
+                </Viewbox>
+                <StackPanel Grid.Row="1" Spacing="6">
                     <TextBlock Text="{x:Bind Player.CurrentTrack.Name, Mode=OneWay}" FontSize="24" FontWeight="SemiBold"
                                Foreground="White" TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{x:Bind Player.CurrentTrack.ArtistNames, Mode=OneWay}" FontSize="16" Foreground="#C0FFFFFF" />
@@ -63,7 +71,7 @@
                         </Border>
                     </StackPanel>
                 </StackPanel>
-            </StackPanel>
+            </Grid>
 
             <!-- Lyrics column -->
             <Grid Grid.Column="1">

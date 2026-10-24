@@ -24,17 +24,17 @@
                     <TextBlock Text="{x:Bind Player.CurrentTrack.ArtistNames, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" FontSize="14" />
                     <TextBlock Text="{x:Bind Player.CurrentTrack.Album.Name, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" />
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,16,0,0">
-                        <Button Style="{StaticResource PlayerIconButtonStyle}" Width="44" Height="44" Click="Trash_Click" ToolTipService.ToolTip="不喜欢">
+                        <Button Style="{StaticResource PlayerIconButtonStyle}" Width="44" Height="44" Click="Trash_Click" ToolTipService.ToolTip="不喜欢" AutomationProperties.Name="不喜欢">
                             <FontIcon Glyph="&#xE74D;" FontSize="16" />
                         </Button>
-                        <Button Style="{StaticResource PlayerIconButtonStyle}" Width="44" Height="44" Click="Like_Click" ToolTipService.ToolTip="喜欢">
+                        <Button Style="{StaticResource PlayerIconButtonStyle}" Width="44" Height="44" Click="Like_Click" ToolTipService.ToolTip="喜欢" AutomationProperties.Name="喜欢">
                             <FontIcon Glyph="{x:Bind LikeGlyph, Mode=OneWay}" FontSize="16" Foreground="{ThemeResource CloudieAccentBrush}" />
                         </Button>
                         <Button Style="{StaticResource PlayerIconButtonStyle}" Width="56" Height="56" CornerRadius="28"
-                                Background="{ThemeResource CloudieTextPrimaryBrush}" Click="PlayPause_Click">
+                                Background="{ThemeResource CloudieTextPrimaryBrush}" Click="PlayPause_Click" AutomationProperties.Name="播放 / 暂停">
                             <FontIcon Glyph="{x:Bind PlayGlyph, Mode=OneWay}" FontSize="20" Foreground="{ThemeResource CloudieSurfaceBrush}" />
                         </Button>
-                        <Button Style="{StaticResource PlayerIconButtonStyle}" Width="44" Height="44" Click="Next_Click" ToolTipService.ToolTip="下一首">
+                        <Button Style="{StaticResource PlayerIconButtonStyle}" Width="44" Height="44" Click="Next_Click" ToolTipService.ToolTip="下一首" AutomationProperties.Name="下一首">
                             <FontIcon Glyph="&#xE893;" FontSize="16" />
                         </Button>
                     </StackPanel>

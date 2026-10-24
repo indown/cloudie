@@ -47,7 +47,7 @@
                             <TextBlock Text="心动模式" />
                         </StackPanel>
                     </Button>
-                    <Button CornerRadius="18" Padding="12,8" ToolTipService.ToolTip="更多"
+                    <Button CornerRadius="18" Padding="12,8" ToolTipService.ToolTip="更多" AutomationProperties.Name="更多"
                             Visibility="{x:Bind ViewModel.CanEditPlaylist, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
                         <FontIcon Glyph="&#xE712;" FontSize="14" />
                         <Button.Flyout>
@@ -93,7 +93,11 @@
         <Grid Grid.Row="2">
             <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" Width="40" Height="40" VerticalAlignment="Top" Margin="0,40,0,0" />
             <InfoBar Severity="Error" IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
-                     Message="{x:Bind ViewModel.Error, Mode=OneWay}" VerticalAlignment="Top" />
+                     Message="{x:Bind ViewModel.Error, Mode=OneWay}" VerticalAlignment="Top" IsClosable="False">
+                <InfoBar.ActionButton>
+                    <Button Content="重试" Command="{x:Bind ViewModel.RetryCommand}" />
+                </InfoBar.ActionButton>
+            </InfoBar>
             <controls:TrackList x:Name="List" Rows="{x:Bind ViewModel.Rows, Mode=OneWay}" CanRemove="{x:Bind ViewModel.IsOwnPlaylist, Mode=OneWay}"
                                 CanHeartMode="{x:Bind ViewModel.CanHeartMode, Mode=OneWay}" />
         </Grid>

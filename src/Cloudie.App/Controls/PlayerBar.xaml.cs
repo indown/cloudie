@@ -5,28 +5,30 @@ using Cloudie.Core.Playback;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
 
 namespace Cloudie.App.Controls;
 
 public sealed partial class PlayerBar : UserControl, INotifyPropertyChanged
 {
     public PlayerService Player { get; } = App.Services.Player;
+    /// <summary>While the thumb is held, ticks must not snap it back to the playing position.</summary>
+    private bool _scrubbing;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public PlayerBar()
     {
         InitializeComponent();
+        // The slider marks PointerPressed as handled, so the subscription has to ask for handled events too.
+        ProgressSlider.AddHandler(PointerPressedEvent, new PointerEventHandler((_, _) => _scrubbing = true), handledEventsToo: true);
         Player.PropertyChanged += (_, e) =>
         {
             switch (e.PropertyName)
             {
-                case nameof(PlayerService.IsPlaying): Raise(nameof(PlayGlyph)); break;
-                case nameof(PlayerService.Position): Raise(nameof(PositionSeconds)); break;
+                case nameof(PlayerService.IsPlaying): Raise(nameof(PlayGlyph)); Raise(nameof(PlayPauseLabel)); break;
+                case nameof(PlayerService.Position): if (!_scrubbing) Raise(nameof(PositionSeconds)); break;
                 case nameof(PlayerService.Duration): Raise(nameof(DurationSeconds)); break;
-                case nameof(PlayerService.IsShuffled): Raise(nameof(ShuffleBrush)); break;
-                case nameof(PlayerService.RepeatMode): Raise(nameof(RepeatGlyph)); Raise(nameof(RepeatBrush)); break;
+                case nameof(PlayerService.RepeatMode): Raise(nameof(RepeatGlyph)); Raise(nameof(IsRepeatOn)); Raise(nameof(RepeatLabel)); break;
                 case nameof(PlayerService.UnblockSource):
                 case nameof(PlayerService.ServedQuality): Raise(nameof(SourceLabel)); break;
                 case nameof(PlayerService.IsFm):
@@ -36,11 +38,12 @@ public sealed partial class PlayerBar : UserControl, INotifyPropertyChanged
     }
 
     public string PlayGlyph => Player.IsPlaying ? "" : "";
+    public string PlayPauseLabel => Player.IsPlaying ? "暂停" : "播放";
     public double PositionSeconds => Player.Position.TotalSeconds;
     public double DurationSeconds => Math.Max(1, Player.Duration.TotalSeconds);
     public string RepeatGlyph => Player.RepeatMode == RepeatMode.One ? "" : "";
-    public Brush ShuffleBrush => Player.IsShuffled ? AccentBrush : SecondaryBrush;
-    public Brush RepeatBrush => Player.RepeatMode == RepeatMode.Off ? SecondaryBrush : AccentBrush;
+    public bool IsRepeatOn => Player.RepeatMode != RepeatMode.Off;
+    public string RepeatLabel => Player.RepeatMode switch { RepeatMode.One => "单曲循环", RepeatMode.All => "列表循环", _ => "循环模式" };
     public string? SourceLabel => Player.UnblockSource is { } source ? $"来自 {source}" : Player.ServedQuality is { } q ? q.ToUpperInvariant() : null;
     public string? ModeLabel => Player.IsFm ? "私人 FM" : Player.IsHeartMode ? "心动模式" : null;
 
@@ -49,9 +52,6 @@ public sealed partial class PlayerBar : UserControl, INotifyPropertyChanged
         get => Player.Volume * 100;
         set => Player.Volume = value / 100;
     }
-
-    private Brush AccentBrush => (Brush)Application.Current.Resources["CloudieAccentBrush"];
-    private Brush SecondaryBrush => (Brush)Application.Current.Resources["CloudieTextSecondaryBrush"];
 
     private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
@@ -63,8 +63,27 @@ public sealed partial class PlayerBar : UserControl, INotifyPropertyChanged
     private void Repeat_Click(object sender, RoutedEventArgs e) => Player.CycleRepeatMode();
     private void Lyrics_Click(object sender, RoutedEventArgs e) => Player.ShowNowPlaying = !Player.ShowNowPlaying;
 
-    private void ProgressSlider_PointerCaptureLost(object sender, PointerRoutedEventArgs e) =>
+    private void ProgressSlider_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        _scrubbing = false;
         Player.Seek(TimeSpan.FromSeconds(ProgressSlider.Value));
+    }
+
+    /// <summary>Arrow, Home/End and Page keys move the thumb without a pointer capture; seek when they land.</summary>
+    private void ProgressSlider_KeyUp(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key is Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right or Windows.System.VirtualKey.Home
+            or Windows.System.VirtualKey.End or Windows.System.VirtualKey.PageUp or Windows.System.VirtualKey.PageDown)
+        {
+            Player.Seek(TimeSpan.FromSeconds(ProgressSlider.Value));
+        }
+    }
+
+    /// <summary>The list exists only once the flyout is open, so the scroll waits for Opened.</summary>
+    private void QueueFlyout_Opened(object sender, object e)
+    {
+        if (Player.CurrentTrack is { } track) QueueList.ScrollIntoView(track, ScrollIntoViewAlignment.Leading);
+    }
 
     private void Queue_ItemClick(object sender, ItemClickEventArgs e)
     {

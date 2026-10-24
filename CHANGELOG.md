@@ -24,3 +24,20 @@
   "从歌单中移除" on own playlists, window size / position / maximized state remembered with a 960×600 minimum.
 - Core: personal FM and playlist endpoints, `PlaybackStore` (queue.json + playback.json), `PlaybackQueue.Restore`,
   `WindowPlacement` setting with display fitting; 63 unit tests.
+- App: first on-device pass (WSL → Windows build loop in `scripts/wsl-dev.sh`): queue flyout marks and scrolls to
+  the current song, row context menus open anywhere on the row, list pages get a 重试 button and Chinese error
+  text, the daily page shows a cover, sidebar names trim with an ellipsis, icon buttons carry automation names,
+  the navigation pane compacts on narrow windows, the now-playing artwork scales instead of cropping, the minimum
+  window size is DPI-aware, and the progress slider no longer snaps back while dragged.
+
+### Fixed
+
+- Core: NetEase answers `personalized/playlist` with `"playCount": 1.2345678E7`; every `int`/`long` field now
+  accepts floats, strings and booleans instead of failing the whole response.
+- App: switching the theme (or the audio quality) in Settings re-entered the two-way bound setter until the stack
+  overflowed and the app vanished.
+- App: the previous song kept playing while the next URL was fetched, and its position was reported as the new
+  song's listening time (songs without a source, or skipped while loading, were scrobbled with the old song's
+  seconds); a queue with nothing playable no longer cycles forever.
+- App: the home page loaded signed out at start-up and again a second later once the session was restored; the
+  theme brushes now live inside the theme dictionaries so controls stop mixing light and dark values.

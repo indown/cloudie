@@ -3,7 +3,12 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Palette: a quiet dark surface, white text, a single warm accent for the active lyric and play state. -->
+    <!--
+        Palette: a quiet dark surface, white text, a single warm accent for the active lyric and play state.
+        The brushes live inside each theme dictionary on purpose: a brush declared outside with a
+        {ThemeResource} colour is one shared instance, resolved once, so controls could end up mixing
+        light and dark values after a theme change.
+    -->
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
             <Color x:Key="CloudieSurface">#FFF7F7F8</Color>
@@ -12,6 +17,12 @@
             <Color x:Key="CloudieTextPrimary">#FF1C1C1E</Color>
             <Color x:Key="CloudieTextSecondary">#99000000</Color>
             <Color x:Key="CloudieAccent">#FFC98A2B</Color>
+            <SolidColorBrush x:Key="CloudieSurfaceBrush" Color="#FFF7F7F8" />
+            <SolidColorBrush x:Key="CloudieSurfaceElevatedBrush" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="CloudieSidebarBrush" Color="#FFEFEFF2" />
+            <SolidColorBrush x:Key="CloudieTextPrimaryBrush" Color="#FF1C1C1E" />
+            <SolidColorBrush x:Key="CloudieTextSecondaryBrush" Color="#99000000" />
+            <SolidColorBrush x:Key="CloudieAccentBrush" Color="#FFC98A2B" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Default">
             <Color x:Key="CloudieSurface">#FF121212</Color>
@@ -20,15 +31,22 @@
             <Color x:Key="CloudieTextPrimary">#FFF5F5F5</Color>
             <Color x:Key="CloudieTextSecondary">#99FFFFFF</Color>
             <Color x:Key="CloudieAccent">#FFE9B872</Color>
+            <SolidColorBrush x:Key="CloudieSurfaceBrush" Color="#FF121212" />
+            <SolidColorBrush x:Key="CloudieSurfaceElevatedBrush" Color="#FF1C1C1E" />
+            <SolidColorBrush x:Key="CloudieSidebarBrush" Color="#FF171718" />
+            <SolidColorBrush x:Key="CloudieTextPrimaryBrush" Color="#FFF5F5F5" />
+            <SolidColorBrush x:Key="CloudieTextSecondaryBrush" Color="#99FFFFFF" />
+            <SolidColorBrush x:Key="CloudieAccentBrush" Color="#FFE9B872" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="CloudieSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CloudieSurfaceElevatedBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CloudieSidebarBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CloudieTextPrimaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="CloudieTextSecondaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="CloudieAccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
-
-    <SolidColorBrush x:Key="CloudieSurfaceBrush" Color="{ThemeResource CloudieSurface}" />
-    <SolidColorBrush x:Key="CloudieSurfaceElevatedBrush" Color="{ThemeResource CloudieSurfaceElevated}" />
-    <SolidColorBrush x:Key="CloudieSidebarBrush" Color="{ThemeResource CloudieSidebar}" />
-    <SolidColorBrush x:Key="CloudieTextPrimaryBrush" Color="{ThemeResource CloudieTextPrimary}" />
-    <SolidColorBrush x:Key="CloudieTextSecondaryBrush" Color="{ThemeResource CloudieTextSecondary}" />
-    <SolidColorBrush x:Key="CloudieAccentBrush" Color="{ThemeResource CloudieAccent}" />
 
     <x:Double x:Key="PlayerBarHeight">80</x:Double>
     <CornerRadius x:Key="CoverCornerRadius">8</CornerRadius>

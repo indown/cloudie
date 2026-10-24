@@ -16,7 +16,8 @@
         </ListView.ItemContainerStyle>
         <ListView.ItemTemplate>
             <DataTemplate x:DataType="vm:TrackRow">
-                <Grid ColumnSpacing="12" Opacity="{x:Bind Opacity}">
+                <!-- Transparent (not null) background: otherwise only the text and image parts take the right-click. -->
+                <Grid ColumnSpacing="12" Opacity="{x:Bind Opacity}" Background="Transparent">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="44" />
@@ -47,7 +48,7 @@
                     </StackPanel>
                     <TextBlock Grid.Column="3" Text="{x:Bind Album}" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
                     <Button Grid.Column="4" Style="{StaticResource PlayerIconButtonStyle}" Width="32" Height="32"
-                            Click="Like_Click" Tag="{x:Bind}">
+                            Click="Like_Click" Tag="{x:Bind}" AutomationProperties.Name="喜欢" ToolTipService.ToolTip="喜欢 / 取消喜欢">
                         <FontIcon Glyph="&#xEB52;" FontSize="14"
                                   Foreground="{ThemeResource CloudieAccentBrush}"
                                   Visibility="{x:Bind IsLiked, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
