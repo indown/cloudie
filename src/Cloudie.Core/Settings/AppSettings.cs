@@ -27,6 +27,7 @@ public sealed class AppSettings(ISettingsStore store)
         public const string AudioCacheEnabled = "cache.audio.enabled";
         public const string AudioCacheLimit = "cache.audio.limitBytes";
         public const string AudioCacheDirectory = "cache.audio.directory";
+        public const string SourceAccountEnabled = "netease.sourceAccount.enabled";
     }
 
     public const long DefaultAudioCacheLimit = 1L << 30;
@@ -94,6 +95,13 @@ public sealed class AppSettings(ISettingsStore store)
     {
         get => Store.GetString(Keys.AudioCacheDirectory);
         set => Store.SetString(Keys.AudioCacheDirectory, string.IsNullOrWhiteSpace(value) ? null : value.Trim());
+    }
+
+    /// <summary>音源账号: fetch song URLs through the second account while one is signed in.</summary>
+    public bool SourceAccountEnabled
+    {
+        get => Store.GetBool(Keys.SourceAccountEnabled, true);
+        set => Store.SetBool(Keys.SourceAccountEnabled, value);
     }
 
     /// <summary>Last window bounds; null until the window has been moved or closed once.</summary>
