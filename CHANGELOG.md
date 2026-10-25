@@ -78,6 +78,9 @@
   scrolling placeholders are off, the row context menu is one shared MenuFlyout instead of nine items plus
   icons built for every realised row, cover BitmapImages are cached by URL so recycled rows do not decode the
   same cover again, and the locate button's scroll check no longer scans every row.
+- App: the minimise / maximise / close buttons kept the Windows theme's colours, so with 深色 chosen on a
+  light system they were dark on dark. `AppWindow.TitleBar` button colours now follow the content theme
+  (and track 跟随系统 changes through `ActualThemeChanged`).
 - App: the 重试 button on a list page's error bar did nothing: the bar shared a grid cell with the (empty)
   song list, which lay on top of it and took the clicks. The bar now has its own row; the search page gets
   the same button.

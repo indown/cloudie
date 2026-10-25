@@ -3,6 +3,7 @@ using Cloudie.App.Controls;
 using Cloudie.App.ViewModels;
 using Cloudie.App.Views;
 using Cloudie.Core.Settings;
+using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -11,6 +12,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Graphics;
+using Windows.UI;
 
 namespace Cloudie.App;
 
@@ -36,6 +38,8 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Cloudie.ico"));
         RestorePlacement();
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+        // 跟随系统: when Windows switches theme the content follows, and so must the caption buttons.
+        if (Content is FrameworkElement content) content.ActualThemeChanged += (sender, _) => PaintCaptionButtons(sender.ActualTheme);
         _suggestTimer = DispatcherQueue.CreateTimer();
         _suggestTimer.Interval = TimeSpan.FromMilliseconds(250);
         _suggestTimer.IsRepeating = false;
@@ -125,7 +129,27 @@ public sealed partial class MainWindow : Window
                 AppTheme.Dark => ElementTheme.Dark,
                 _ => ElementTheme.Default
             };
+            PaintCaptionButtons(root.ActualTheme);
         }
+    }
+
+    /// <summary>
+    /// The minimise / maximise / close buttons are drawn by the shell in the Windows theme, not the app's: with
+    /// 深色 chosen on a light system they came out dark on dark. Their colours follow the content's theme instead.
+    /// </summary>
+    private void PaintCaptionButtons(ElementTheme theme)
+    {
+        var bar = AppWindow.TitleBar;
+        var dark = theme == ElementTheme.Dark;
+        var foreground = dark ? Colors.White : Color.FromArgb(255, 0x1C, 0x1C, 0x1E);
+        bar.ButtonBackgroundColor = Colors.Transparent;
+        bar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        bar.ButtonForegroundColor = foreground;
+        bar.ButtonHoverForegroundColor = foreground;
+        bar.ButtonPressedForegroundColor = foreground;
+        bar.ButtonInactiveForegroundColor = dark ? Color.FromArgb(0x80, 255, 255, 255) : Color.FromArgb(0x99, 0, 0, 0);
+        bar.ButtonHoverBackgroundColor = dark ? Color.FromArgb(0x1A, 255, 255, 255) : Color.FromArgb(0x14, 0, 0, 0);
+        bar.ButtonPressedBackgroundColor = dark ? Color.FromArgb(0x33, 255, 255, 255) : Color.FromArgb(0x26, 0, 0, 0);
     }
 
     public void Navigate(NavigationEntry entry)
