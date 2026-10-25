@@ -34,6 +34,13 @@ public sealed partial class TrackList : UserControl
     public static readonly DependencyProperty CanHeartModeProperty = DependencyProperty.Register(
         nameof(CanHeartMode), typeof(bool), typeof(TrackList), new PropertyMetadata(false));
 
+    /// <summary>
+    /// Content above the first row that scrolls with it (the page header: cover, title, actions), so a long
+    /// list gets the whole height once the user scrolls. Fixed above the list, it left two rows on an artist page.
+    /// </summary>
+    public static readonly DependencyProperty HeaderProperty = DependencyProperty.Register(
+        nameof(Header), typeof(object), typeof(TrackList), new PropertyMetadata(null));
+
     public ObservableCollection<TrackRow>? Rows
     {
         get => (ObservableCollection<TrackRow>?)GetValue(RowsProperty);
@@ -60,6 +67,12 @@ public sealed partial class TrackList : UserControl
         set => SetValue(CanHeartModeProperty, value);
     }
 
+    public object? Header
+    {
+        get => GetValue(HeaderProperty);
+        set => SetValue(HeaderProperty, value);
+    }
+
     /// <summary>Raised when the user wants a row played (double-click, menu).</summary>
     public event Action<TrackRow>? PlayRequested;
     public event Action<TrackRow>? PlayNextRequested;
@@ -71,6 +84,10 @@ public sealed partial class TrackList : UserControl
 
     private ScrollViewer? _scroller;
     private bool _locateShown;
+    /// <summary>Where wheel scrolling handed over from the header is heading, so quick notches add up while the view animates.</summary>
+    private double? _wheelTarget;
+    /// <summary>What one wheel notch moves the list, measured against the list's own wheel scrolling (Windows' default three lines).</summary>
+    private const double WheelStep = 92;
     /// <summary>The row whose context menu is open; the menu is shared by all rows.</summary>
     private TrackRow? _menuRow;
     private TrackRow? _currentRow;
@@ -81,7 +98,14 @@ public sealed partial class TrackList : UserControl
         List.Loaded += (_, _) =>
         {
             _scroller ??= List.FindDescendant<ScrollViewer>();
-            if (_scroller is not null) _scroller.ViewChanged += (_, _) => UpdateLocate();
+            if (_scroller is not null)
+            {
+                _scroller.ViewChanged += (_, e) =>
+                {
+                    if (!e.IsIntermediate) _wheelTarget = null;
+                    UpdateLocate();
+                };
+            }
             UpdateLocate();
         };
         // MarkCurrent in the view-model runs on the same notification, before this (it subscribed earlier);
@@ -90,6 +114,20 @@ public sealed partial class TrackList : UserControl
         {
             if (e.PropertyName == nameof(PlayerService.CurrentTrack)) DispatcherQueue.TryEnqueue(RefreshCurrentRow);
         };
+    }
+
+    /// <summary>
+    /// Scrolls the list by a mouse-wheel delta (120 per notch, positive = towards the top) on behalf of a part
+    /// of the header that swallows the wheel itself: a nested ScrollViewer, like the album strip, takes the
+    /// event and does not pass it on to the page even when it has nothing to scroll that way.
+    /// </summary>
+    public void ScrollByWheel(int delta)
+    {
+        if (_scroller is null) return;
+        var from = _wheelTarget ?? _scroller.VerticalOffset;
+        var target = Math.Clamp(from - delta / 120.0 * WheelStep, 0, _scroller.ScrollableHeight);
+        _wheelTarget = target;
+        _scroller.ChangeView(null, target, null, disableAnimation: false);
     }
 
     // MARK: 定位到正在播放

@@ -6,102 +6,98 @@
     xmlns:controls="using:Cloudie.App.Controls"
     xmlns:models="using:Cloudie.Core.Netease.Models">
 
-    <Grid Padding="32,16,32,0" RowSpacing="16">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+    <!-- The whole page is the list's scroller: the header rides in the list (TrackList.Header), so it scrolls away
+         with the first rows and a long list gets the full height. Fixed above the list, it left two visible rows on
+         an artist page with its album strip. -->
+    <controls:TrackList x:Name="List" Padding="32,16,32,0" Rows="{x:Bind ViewModel.Rows, Mode=OneWay}" CanRemove="{x:Bind ViewModel.IsOwnPlaylist, Mode=OneWay}"
+                        CanHeartMode="{x:Bind ViewModel.CanHeartMode, Mode=OneWay}" CanLocate="True">
+        <controls:TrackList.Header>
+            <StackPanel Spacing="16" Margin="0,0,0,16">
+                <Grid ColumnSpacing="24">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="200" Height="200" CornerRadius="{StaticResource CardCornerRadius}" Background="{ThemeResource CloudieSurfaceElevatedBrush}">
+                        <Image Source="{x:Bind ViewModel.CoverUrl, Mode=OneWay, Converter={StaticResource CoverUrl}, ConverterParameter=400}" Stretch="UniformToFill" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Spacing="8">
+                        <TextBlock Text="{x:Bind ViewModel.Title, Mode=OneWay}" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" />
+                        <TextBlock Text="{x:Bind ViewModel.Subtitle, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" FontSize="13" />
+                        <TextBlock Text="{x:Bind ViewModel.Description, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" MaxLines="3" />
+                        <TextBlock Text="{x:Bind ViewModel.Summary, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Command="{x:Bind ViewModel.PlayAllCommand}" Style="{StaticResource AccentButtonStyle}" CornerRadius="18" Padding="20,8">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE768;" FontSize="14" />
+                                    <TextBlock Text="播放全部" />
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{x:Bind ViewModel.ToggleSubscribeCommand}" CornerRadius="18" Padding="16,8"
+                                    Visibility="{x:Bind ViewModel.CanSubscribe, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="{x:Bind ViewModel.SubscribeGlyph, Mode=OneWay}" FontSize="14" />
+                                    <TextBlock Text="{x:Bind ViewModel.SubscribeLabel, Mode=OneWay}" />
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{x:Bind ViewModel.StartHeartModeCommand}" CornerRadius="18" Padding="16,8"
+                                    Visibility="{x:Bind ViewModel.CanHeartMode, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xEB52;" FontSize="14" Foreground="{ThemeResource CloudieAccentBrush}" />
+                                    <TextBlock Text="心动模式" />
+                                </StackPanel>
+                            </Button>
+                            <Button CornerRadius="18" Padding="12,8" ToolTipService.ToolTip="更多" AutomationProperties.Name="更多"
+                                    Visibility="{x:Bind ViewModel.CanEditPlaylist, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                <FontIcon Glyph="&#xE712;" FontSize="14" />
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="Bottom">
+                                        <MenuFlyoutItem Text="重命名" Click="Rename_Click">
+                                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8AC;" /></MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                        <MenuFlyoutItem Text="删除歌单" Click="Delete_Click">
+                                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" /></MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
 
-        <Grid ColumnSpacing="24">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Border Width="200" Height="200" CornerRadius="{StaticResource CardCornerRadius}" Background="{ThemeResource CloudieSurfaceElevatedBrush}">
-                <Image Source="{x:Bind ViewModel.CoverUrl, Mode=OneWay, Converter={StaticResource CoverUrl}, ConverterParameter=400}" Stretch="UniformToFill" />
-            </Border>
-            <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Spacing="8">
-                <TextBlock Text="{x:Bind ViewModel.Title, Mode=OneWay}" FontSize="28" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" />
-                <TextBlock Text="{x:Bind ViewModel.Subtitle, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" FontSize="13" />
-                <TextBlock Text="{x:Bind ViewModel.Description, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap" MaxLines="3" />
-                <TextBlock Text="{x:Bind ViewModel.Summary, Mode=OneWay}" Style="{StaticResource SecondaryTextStyle}" />
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Command="{x:Bind ViewModel.PlayAllCommand}" Style="{StaticResource AccentButtonStyle}" CornerRadius="18" Padding="20,8">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE768;" FontSize="14" />
-                            <TextBlock Text="播放全部" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{x:Bind ViewModel.ToggleSubscribeCommand}" CornerRadius="18" Padding="16,8"
-                            Visibility="{x:Bind ViewModel.CanSubscribe, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="{x:Bind ViewModel.SubscribeGlyph, Mode=OneWay}" FontSize="14" />
-                            <TextBlock Text="{x:Bind ViewModel.SubscribeLabel, Mode=OneWay}" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{x:Bind ViewModel.StartHeartModeCommand}" CornerRadius="18" Padding="16,8"
-                            Visibility="{x:Bind ViewModel.CanHeartMode, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xEB52;" FontSize="14" Foreground="{ThemeResource CloudieAccentBrush}" />
-                            <TextBlock Text="心动模式" />
-                        </StackPanel>
-                    </Button>
-                    <Button CornerRadius="18" Padding="12,8" ToolTipService.ToolTip="更多" AutomationProperties.Name="更多"
-                            Visibility="{x:Bind ViewModel.CanEditPlaylist, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                        <FontIcon Glyph="&#xE712;" FontSize="14" />
-                        <Button.Flyout>
-                            <MenuFlyout Placement="Bottom">
-                                <MenuFlyoutItem Text="重命名" Click="Rename_Click">
-                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8AC;" /></MenuFlyoutItem.Icon>
-                                </MenuFlyoutItem>
-                                <MenuFlyoutItem Text="删除歌单" Click="Delete_Click">
-                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" /></MenuFlyoutItem.Icon>
-                                </MenuFlyoutItem>
-                            </MenuFlyout>
-                        </Button.Flyout>
-                    </Button>
+                <!-- Artist pages: one scrolling row of albums above the hot songs. Vertical scrolling stays *enabled* on the
+                     strip (there is nothing to scroll that way): disabled, the strip would take the mouse wheel as sideways
+                     scrolling. Enabled, it swallows the wheel instead, so the page hands it on to the song list (see
+                     Albums_PointerWheelChanged). Sideways is Shift+wheel, the scrollbar or a touchpad gesture. -->
+                <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.HasAlbums, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="专辑" Style="{StaticResource SectionTitleStyle}" />
+                    <GridView x:Name="Albums" ItemsSource="{x:Bind ViewModel.Albums, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Album_ItemClick"
+                              ItemContainerStyle="{StaticResource CardItemStyle}" Margin="-4,0,0,0"
+                              ScrollViewer.HorizontalScrollMode="Enabled" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              ScrollViewer.VerticalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Hidden">
+                        <GridView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsWrapGrid Orientation="Vertical" MaximumRowsOrColumns="1" />
+                            </ItemsPanelTemplate>
+                        </GridView.ItemsPanel>
+                        <GridView.ItemTemplate>
+                            <DataTemplate x:DataType="models:AlbumSummary">
+                                <controls:CoverCard Size="120" ImageUrl="{x:Bind PicUrl}" Title="{x:Bind Name}" Subtitle="{x:Bind PublishYear}" />
+                            </DataTemplate>
+                        </GridView.ItemTemplate>
+                    </GridView>
                 </StackPanel>
+
+                <InfoBar Severity="Error" IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                         Message="{x:Bind ViewModel.Error, Mode=OneWay}" IsClosable="False">
+                    <InfoBar.ActionButton>
+                        <Button Content="重试" Command="{x:Bind ViewModel.RetryCommand}" />
+                    </InfoBar.ActionButton>
+                </InfoBar>
+                <!-- Where the rows will appear; collapsed as well as inactive, so it takes no space when done. -->
+                <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" Width="40" Height="40" HorizontalAlignment="Center" Margin="0,24,0,0"
+                              Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
-        </Grid>
-
-        <!-- Artist pages: one scrolling row of albums above the hot songs. -->
-        <StackPanel Grid.Row="1" Spacing="8" Visibility="{x:Bind ViewModel.HasAlbums, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Text="专辑" Style="{StaticResource SectionTitleStyle}" />
-            <GridView ItemsSource="{x:Bind ViewModel.Albums, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Album_ItemClick"
-                      ItemContainerStyle="{StaticResource CardItemStyle}" Margin="-4,0,0,0"
-                      ScrollViewer.HorizontalScrollMode="Enabled" ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                      ScrollViewer.VerticalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden">
-                <GridView.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <ItemsWrapGrid Orientation="Vertical" MaximumRowsOrColumns="1" />
-                    </ItemsPanelTemplate>
-                </GridView.ItemsPanel>
-                <GridView.ItemTemplate>
-                    <DataTemplate x:DataType="models:AlbumSummary">
-                        <controls:CoverCard Size="120" ImageUrl="{x:Bind PicUrl}" Title="{x:Bind Name}" Subtitle="{x:Bind PublishYear}" />
-                    </DataTemplate>
-                </GridView.ItemTemplate>
-            </GridView>
-        </StackPanel>
-
-        <Grid Grid.Row="2" RowSpacing="8">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <!-- Its own row: laid over the list it was unreachable, the empty ListView took the clicks on 重试. -->
-            <InfoBar Severity="Error" IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
-                     Message="{x:Bind ViewModel.Error, Mode=OneWay}" IsClosable="False">
-                <InfoBar.ActionButton>
-                    <Button Content="重试" Command="{x:Bind ViewModel.RetryCommand}" />
-                </InfoBar.ActionButton>
-            </InfoBar>
-            <Grid Grid.Row="1">
-                <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" Width="40" Height="40" VerticalAlignment="Top" Margin="0,40,0,0" />
-                <controls:TrackList x:Name="List" Rows="{x:Bind ViewModel.Rows, Mode=OneWay}" CanRemove="{x:Bind ViewModel.IsOwnPlaylist, Mode=OneWay}"
-                                    CanHeartMode="{x:Bind ViewModel.CanHeartMode, Mode=OneWay}" CanLocate="True" />
-            </Grid>
-        </Grid>
-    </Grid>
+        </controls:TrackList.Header>
+    </controls:TrackList>
 </Page>

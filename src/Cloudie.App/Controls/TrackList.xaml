@@ -39,9 +39,12 @@
     </UserControl.Resources>
 
     <Grid>
-    <!-- ShowsScrollingPlaceholders off: the grey blocks it paints while a long list scrolls fast look like a veil. -->
+    <!-- ShowsScrollingPlaceholders off: the grey blocks it paints while a long list scrolls fast look like a veil.
+         Header and Padding are the control's own, passed through: the page header scrolls with the rows, and the
+         padding sits inside the scroller so the scrollbar stays at the edge of the page. -->
     <ListView x:Name="List" ItemsSource="{x:Bind Rows, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True"
-              ItemClick="List_ItemClick" DoubleTapped="List_DoubleTapped" ShowsScrollingPlaceholders="False">
+              ItemClick="List_ItemClick" DoubleTapped="List_DoubleTapped" ShowsScrollingPlaceholders="False"
+              Header="{x:Bind Header, Mode=OneWay}" Padding="{x:Bind Padding, Mode=OneWay}">
         <ListView.ItemContainerStyle>
             <Style TargetType="ListViewItem">
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -98,7 +101,7 @@
     </ListView>
 
     <!-- 定位: floats over the list while the playing song's row is scrolled out of view (CanLocate pages only). -->
-    <Button x:Name="LocateButton" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,28,20"
+    <Button x:Name="LocateButton" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,60,20"
             Width="44" Height="44" CornerRadius="22" Padding="0" Opacity="0" IsHitTestVisible="False"
             Background="{ThemeResource CloudieSurfaceElevatedBrush}" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
             Translation="0,0,24" Click="Locate_Click"

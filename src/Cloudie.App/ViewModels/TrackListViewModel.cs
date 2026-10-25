@@ -197,7 +197,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         Subtitle = response.Artist is { } artist ? $"{artist.MusicSize} 首歌曲 · {artist.AlbumSize} 张专辑" : null;
         Description = response.Artist?.BriefDesc;
         CoverUrl = response.Artist?.ImageUrl;
-        SetTracks(response.HotSongs, null);
+        SetTracks(response.HotSongs, null, countLabel: "热门");
         try
         {
             var albums = await _api.GetArtistAlbumsAsync(id, limit: 30);
@@ -210,7 +210,8 @@ public sealed partial class TrackListViewModel : ObservableObject
         HasAlbums = Albums.Count > 0;
     }
 
-    private void SetTracks(IReadOnlyList<Track> tracks, IReadOnlyList<TrackPrivilege>? privileges)
+    /// <param name="countLabel">Names what the rows are when the header already counts something else, e.g. 热门 under an artist's full song count.</param>
+    private void SetTracks(IReadOnlyList<Track> tracks, IReadOnlyList<TrackPrivilege>? privileges, string? countLabel = null)
     {
         _tracks.Clear();
         _tracks.AddRange(tracks);
@@ -223,7 +224,8 @@ public sealed partial class TrackListViewModel : ObservableObject
             Rows.Add(new TrackRow(track, playability, number++) { IsLiked = _account.IsLiked(track.Id) });
         }
         var total = TimeSpan.FromMilliseconds(tracks.Sum(static t => (double)t.DurationMs));
-        Summary = $"{tracks.Count} 首歌曲，{(int)total.TotalHours} 小时 {total.Minutes} 分钟";
+        var count = countLabel is null ? $"{tracks.Count} 首歌曲" : $"{countLabel} {tracks.Count} 首";
+        Summary = $"{count}，{(int)total.TotalHours} 小时 {total.Minutes} 分钟";
         MarkCurrent();
     }
 
