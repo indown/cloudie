@@ -80,10 +80,27 @@ public sealed partial class AccountService(NeteaseApi api, LogService log) : Obs
 
     public bool IsLiked(long trackId) => _likedIds.Contains(trackId);
 
+    /// <summary>
+    /// Likes or unlikes a song. The liked set, and every heart bound to it, changes at once; a failed request
+    /// puts it back and throws, so the caller can say so.
+    /// </summary>
     public async Task ToggleLikeAsync(long trackId)
     {
         var like = !_likedIds.Contains(trackId);
-        await api.LikeTrackAsync(trackId, like);
+        SetLiked(trackId, like);
+        try
+        {
+            await api.LikeTrackAsync(trackId, like);
+        }
+        catch
+        {
+            SetLiked(trackId, !like);
+            throw;
+        }
+    }
+
+    private void SetLiked(long trackId, bool like)
+    {
         if (like) _likedIds.Add(trackId); else _likedIds.Remove(trackId);
         LikedSongsChanged?.Invoke(this, EventArgs.Empty);
     }

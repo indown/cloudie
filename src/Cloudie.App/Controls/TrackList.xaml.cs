@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using Cloudie.App.Services;
 using Cloudie.App.ViewModels;
 using Cloudie.Core.Netease;
@@ -112,12 +113,35 @@ public sealed partial class TrackList : UserControl
             }
             UpdateLocate();
         };
-        // MarkCurrent in the view-model runs on the same notification, before this (it subscribed earlier);
-        // deferring once more makes sure the rows carry the new IsCurrent flags.
-        App.Services.Player.PropertyChanged += (_, e) =>
+        // Subscribed while on screen only: a list lives as long as its page, the services live as long as the app.
+        Loaded += (_, _) =>
         {
-            if (e.PropertyName == nameof(PlayerService.CurrentTrack)) DispatcherQueue.TryEnqueue(RefreshCurrentRow);
+            App.Services.Player.PropertyChanged += OnPlayerChanged;
+            App.Services.Account.LikedSongsChanged += OnLikedSongsChanged;
+            RefreshLikes();
         };
+        Unloaded += (_, _) =>
+        {
+            App.Services.Player.PropertyChanged -= OnPlayerChanged;
+            App.Services.Account.LikedSongsChanged -= OnLikedSongsChanged;
+        };
+    }
+
+    // MarkCurrent in the view-model runs on the same notification, before this (it subscribed earlier);
+    // deferring once more makes sure the rows carry the new IsCurrent flags.
+    private void OnPlayerChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PlayerService.CurrentTrack)) DispatcherQueue.TryEnqueue(RefreshCurrentRow);
+    }
+
+    /// <summary>The hearts follow the account's liked set, whichever page changed it, and back when a toggle failed.</summary>
+    private void OnLikedSongsChanged(object? sender, EventArgs e) => RefreshLikes();
+
+    private void RefreshLikes()
+    {
+        if (Rows is null) return;
+        var account = App.Services.Account;
+        foreach (var row in Rows) row.IsLiked = account.IsLiked(row.Track.Id);
     }
 
     /// <summary>

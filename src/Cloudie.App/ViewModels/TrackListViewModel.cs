@@ -90,10 +90,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         {
             if (e.PropertyName == nameof(PlayerService.CurrentTrack)) MarkCurrent();
         };
-        _account.LikedSongsChanged += (_, _) =>
-        {
-            foreach (var row in Rows) row.IsLiked = _account.IsLiked(row.Track.Id);
-        };
+        // The hearts follow the liked set inside TrackList itself, so the search page gets the same behaviour.
     }
 
     public async Task LoadAsync(TrackListRequest request)
@@ -309,6 +306,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         catch (Exception error)
         {
             _log.Warn($"like {row.Track.Id}: {error.Message}");
+            App.Services.Status.Show("操作失败：" + ErrorText.Describe(error));
         }
     }
 }

@@ -21,7 +21,7 @@ public sealed partial class SearchPage : Page, INotifyPropertyChanged
         InitializeComponent();
         List.PlayRequested += row => _ = ViewModel.PlayAsync(row);
         List.PlayNextRequested += row => App.Services.Player.PlayNext(row.Track);
-        List.LikeRequested += row => _ = App.Services.Account.ToggleLikeAsync(row.Track.Id);
+        List.LikeRequested += row => _ = ToggleLikeAsync(row);
         List.NavigateRequested += request => Frame.Navigate(typeof(TrackListPage), request);
         ViewModel.PropertyChanged += (_, e) =>
         {
@@ -52,5 +52,18 @@ public sealed partial class SearchPage : Page, INotifyPropertyChanged
     private void Playlist_ItemClick(object sender, ItemClickEventArgs e)
     {
         if (e.ClickedItem is PlaylistSummary playlist) Frame.Navigate(typeof(TrackListPage), TrackListRequest.Playlist(playlist.Id, playlist.Name));
+    }
+
+    /// <summary>The heart flips at once (the account service is optimistic); a failure flips it back and says so.</summary>
+    private static async Task ToggleLikeAsync(Cloudie.App.ViewModels.TrackRow row)
+    {
+        try
+        {
+            await App.Services.Account.ToggleLikeAsync(row.Track.Id);
+        }
+        catch (Exception error)
+        {
+            App.Services.Status.Show("操作失败：" + Cloudie.App.Services.ErrorText.Describe(error));
+        }
     }
 }

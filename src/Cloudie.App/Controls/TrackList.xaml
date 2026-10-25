@@ -87,11 +87,16 @@
                         <TextBlock Text="{x:Bind Artists}" Style="{StaticResource SecondaryTextStyle}" />
                     </StackPanel>
                     <TextBlock Grid.Column="3" Text="{x:Bind Album}" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" x:Phase="1" />
+                    <!-- A filled heart when liked, an outline one otherwise: the spot has to be visible before the song is liked
+                         (it used to be an empty 32 px square until then). -->
                     <Button Grid.Column="4" Style="{StaticResource PlayerIconButtonStyle}" Width="32" Height="32"
                             Click="Like_Click" Tag="{x:Bind}" AutomationProperties.Name="喜欢" ToolTipService.ToolTip="喜欢 / 取消喜欢">
-                        <FontIcon Glyph="&#xEB52;" FontSize="14"
-                                  Foreground="{ThemeResource CloudieAccentBrush}"
-                                  Visibility="{x:Bind IsLiked, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                        <Grid>
+                            <FontIcon Glyph="&#xEB52;" FontSize="14" Foreground="{ThemeResource CloudieAccentBrush}"
+                                      Visibility="{x:Bind IsLiked, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                            <FontIcon Glyph="&#xEB51;" FontSize="14" Foreground="{ThemeResource CloudieTextSecondaryBrush}"
+                                      Visibility="{x:Bind IsLiked, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibility}}" />
+                        </Grid>
                     </Button>
                     <TextBlock Grid.Column="5" Text="{x:Bind Duration, Converter={StaticResource TimeSpanToText}}"
                                Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" HorizontalAlignment="Right" />
