@@ -44,7 +44,12 @@ Notes for anyone (human or agent) continuing this code base.
   configured folder fails `AudioCache.IsUsableDirectory` at start-up. Playback opens them with `MediaSource.CreateFromStream` and a MIME type from
   `AudioFormat` (magic bytes first: CDNs answer `application/octet-stream`); the file is opened with
   `FileShare.Delete` so eviction can remove a song while it plays. Fill happens from `PlayerService.Tick` after
-  `AudioCache.ShouldStartCaching`, one download at a time, never on a metered connection or for a trial.
+  `AudioCache.ShouldStartCaching`, one download at a time, never on a metered connection or for a trial. Each entry
+  records the VIP tier at hand when it was fetched: a copy that fell short of the requested level (a non-VIP
+  account gets a downgrade, not a refusal) or came from a gray-track source is looked up again once a higher tier
+  is available (`AudioCache.IsUpgradable`, a 5 s lookup, the cached file plays if nothing better comes) and
+  replaced when NetEase now answers better (`AudioCache.IsBetter`, `DownloadAsync(replace: true)`); a lookup that
+  finds nothing better is remembered with `Confirm` so it is not repeated.
 - 音源账号 (`SourceAccount` + `SongUrlResolver`, Core): a second NetEase session in `cookies-source.json` that
   only answers `song/enhance/player/url/v1`; playlists, recommendations, likes and scrobbles stay with the main
   account. The resolver asks it *first* (a non-VIP account answers a lossless request with a quietly downgraded

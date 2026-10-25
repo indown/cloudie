@@ -19,8 +19,12 @@ public sealed class AudioCacheTests : IDisposable
     private static byte[] Flac(int length) => [.. "fLaC"u8.ToArray(), .. new byte[length - 4]];
     private static byte[] Mp3(int length) => [.. "ID3"u8.ToArray(), .. new byte[length - 3]];
 
-    private static ResolvedMedia Media(long id, string path, AudioQuality quality = AudioQuality.ExHigh, string? served = "exhigh") =>
-        new(id, new Uri("https://cdn.example.com" + path), null, served, quality, DateTimeOffset.UnixEpoch);
+    private static ResolvedMedia Media(long id, string path, AudioQuality quality = AudioQuality.ExHigh, string? served = "exhigh",
+        string? source = null, int vipTier = 0, bool trial = false) =>
+        new(id, new Uri("https://cdn.example.com" + path), source, served, quality, DateTimeOffset.UnixEpoch, trial, false, vipTier);
+
+    private static AudioCacheEntry Entry(AudioQuality requested, string? served, string? source = null, int vipTier = 0) =>
+        new(1, requested, source, served, "audio/mpeg", 100, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, vipTier);
 
     /// <summary>Serves one body per path; a content length header can be forced to lie.</summary>
     private static StubHandler Server(Dictionary<string, byte[]> files, string contentType = "application/octet-stream", long? claimLength = null) =>
@@ -235,5 +239,103 @@ public sealed class AudioCacheTests : IDisposable
         Assert.Equal(@"D:\Cloudie\cache", settings.AudioCacheDirectory);
         settings.AudioCacheDirectory = "";
         Assert.Null(settings.AudioCacheDirectory);
+    }
+
+    // MARK: 升级
+
+    [Fact]
+    public void A_copy_that_fell_short_is_upgradable_once_more_vip_is_at_hand()
+    {
+        Assert.True(AudioCache.IsUpgradable(Entry(AudioQuality.HiRes, "exhigh"), vipTier: 10));          // downgraded without VIP
+        Assert.True(AudioCache.IsUpgradable(Entry(AudioQuality.HiRes, "mp3", "pyncmd"), vipTier: 10));   // a gray-track copy
+        Assert.True(AudioCache.IsUpgradable(Entry(AudioQuality.HiRes, "exhigh", vipTier: 10), vipTier: 11));
+        Assert.False(AudioCache.IsUpgradable(Entry(AudioQuality.HiRes, "exhigh"), vipTier: 0));          // nothing new to try with
+        Assert.False(AudioCache.IsUpgradable(Entry(AudioQuality.HiRes, "exhigh", vipTier: 10), vipTier: 10));
+        Assert.False(AudioCache.IsUpgradable(Entry(AudioQuality.HiRes, "hires"), vipTier: 10));          // got what was asked for
+        Assert.False(AudioCache.IsUpgradable(Entry(AudioQuality.ExHigh, "exhigh"), vipTier: 10));
+    }
+
+    [Fact]
+    public void A_fresh_answer_replaces_the_cache_only_when_it_is_better()
+    {
+        var downgraded = Entry(AudioQuality.HiRes, "exhigh");
+        Assert.True(AudioCache.IsBetter(Media(1, "/a", served: "lossless"), downgraded));
+        Assert.True(AudioCache.IsBetter(Media(1, "/a", served: "hires"), downgraded));
+        Assert.False(AudioCache.IsBetter(Media(1, "/a", served: "exhigh"), downgraded));
+        Assert.False(AudioCache.IsBetter(Media(1, "/a", served: "lossless", trial: true), downgraded));
+        Assert.False(AudioCache.IsBetter(Media(1, "/a", served: "flac", source: "Navidrome"), downgraded));
+
+        // An official file beats a third-party copy of the same level, not a better one.
+        Assert.True(AudioCache.IsBetter(Media(1, "/a", served: "exhigh"), Entry(AudioQuality.HiRes, "mp3", "pyncmd")));
+        Assert.False(AudioCache.IsBetter(Media(1, "/a", served: "exhigh"), Entry(AudioQuality.HiRes, "flac", "pyncmd")));
+        Assert.True(AudioCache.IsBetter(Media(1, "/a", served: "lossless"), Entry(AudioQuality.HiRes, "flac", "pyncmd")));
+        Assert.True(AudioCache.IsBetter(Media(1, "/a", served: "exhigh"), Entry(AudioQuality.HiRes, "ogg", "Navidrome")));
+    }
+
+    [Fact]
+    public async Task Replacing_swaps_the_file_the_entry_and_the_totals()
+    {
+        var files = new Dictionary<string, byte[]> { ["/a.mp3"] = Mp3(1000), ["/a.flac"] = Flac(3000) };
+        using var cache = Cache(Server(files));
+        await cache.DownloadAsync(Media(1, "/a.mp3", AudioQuality.HiRes, served: "exhigh"));
+        Assert.Null(await cache.DownloadAsync(Media(1, "/a.flac", AudioQuality.HiRes, served: "lossless", vipTier: 10)));
+
+        var swapped = await cache.DownloadAsync(Media(1, "/a.flac", AudioQuality.HiRes, served: "lossless", vipTier: 10), replace: true);
+
+        Assert.NotNull(swapped);
+        Assert.Equal("lossless", swapped.ServedQuality);
+        Assert.Equal(10, swapped.VipTier);
+        Assert.Equal("audio/flac", swapped.ContentType);
+        Assert.Equal(1, cache.Count);
+        Assert.Equal(3000, cache.TotalBytes);
+        Assert.Equal(3000, new FileInfo(cache.PathOf(swapped.Key)).Length);
+    }
+
+    [Fact]
+    public async Task Confirm_raises_the_tier_only_upwards_and_survives_a_reload()
+    {
+        var files = new Dictionary<string, byte[]> { ["/a"] = Mp3(500) };
+        using (var cache = Cache(Server(files)))
+        {
+            await cache.DownloadAsync(Media(1, "/a", AudioQuality.HiRes));
+            cache.Confirm(1, AudioQuality.HiRes, vipTier: 10);
+            cache.Confirm(1, AudioQuality.HiRes, vipTier: 5);
+            cache.Confirm(2, AudioQuality.HiRes, vipTier: 10);   // not cached: nothing happens
+        }
+        using var reloaded = Cache(Server(files));
+        var entry = reloaded.Peek(1, AudioQuality.HiRes);
+        Assert.Equal(10, entry!.VipTier);
+        Assert.False(AudioCache.IsUpgradable(entry, vipTier: 10));
+    }
+
+    [Fact]
+    public async Task Peek_does_not_count_as_played()
+    {
+        using var cache = Cache(Server(new Dictionary<string, byte[]> { ["/a"] = Mp3(500) }));
+        await cache.DownloadAsync(Media(1, "/a"));
+        var downloadedAt = _now;
+        _now += TimeSpan.FromHours(1);
+
+        Assert.Equal(downloadedAt, cache.Peek(1, AudioQuality.ExHigh)!.LastPlayedAt);
+        Assert.Equal(_now, cache.TryGet(1, AudioQuality.ExHigh)!.LastPlayedAt);
+        Assert.Null(cache.Peek(2, AudioQuality.ExHigh));
+    }
+
+    [Fact]
+    public void An_index_written_before_vip_tiers_loads_with_tier_zero()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllBytes(Path.Combine(_dir, "1-hires" + AudioCache.FileExtension), Mp3(700));
+        File.WriteAllText(Path.Combine(_dir, "index.json"), """
+            {"Entries":[{"TrackId":1,"Quality":"HiRes","SourceName":null,"ServedQuality":"exhigh","ContentType":"audio/mpeg",
+                         "Bytes":700,"CreatedAt":"2026-10-20T10:00:00+00:00","LastPlayedAt":"2026-10-20T10:00:00+00:00"}]}
+            """);
+        using var cache = Cache(Server(new Dictionary<string, byte[]>()));
+
+        var entry = cache.Peek(1, AudioQuality.HiRes);
+
+        Assert.NotNull(entry);
+        Assert.Equal(0, entry.VipTier);
+        Assert.True(AudioCache.IsUpgradable(entry, vipTier: 10));
     }
 }

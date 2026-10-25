@@ -299,23 +299,49 @@ public sealed partial class PlayerService : ObservableObject
         try
         {
             var quality = _settings.AudioQuality;
-            // 歌曲缓存 first: a song on disk needs no network at all.
+            // 歌曲缓存 first: a song on disk needs no network at all. A copy made before VIP was at hand (a downgraded
+            // file, a gray-track source) is looked up once more first; it still plays if nothing better turns up.
             var local = _settings.AudioCacheEnabled ? OpenCached(track, quality) : null;
+            var upgradable = local is { } cached && AudioCache.IsUpgradable(cached.Entry, _account.PlaybackVipType);
             ResolvedMedia? resolved = null;
             (ResolvedMedia Media, MediaSource? Source)? prefetched = null;
-            if (local is null)
+            if (local is null || upgradable)
             {
                 // A restored session seeks after MediaOpened, so it always opens its stream itself.
                 prefetched = resumeAt is null ? await TakePrefetchedAsync(track, cts.Token) : null;
                 var remembered = prefetched is null ? _resolved.TryGet(track.Id, quality, DateTimeOffset.UtcNow) : null;
                 _currentMediaReused = remembered is not null;
-                resolved = prefetched?.Media ?? remembered ?? await ResolveAsync(track, cts.Token);
+                resolved = prefetched?.Media ?? remembered
+                    ?? (upgradable ? await ResolveForUpgradeAsync(track, cts.Token) : await ResolveAsync(track, cts.Token));
                 if (generation != _loadGeneration)
                 {
                     prefetched?.Source?.Dispose();
+                    local?.Source.Dispose();
+                    local?.Stream.Dispose();
                     return;
                 }
-                if (resolved is null)
+                if (upgradable)
+                {
+                    var entry = local!.Value.Entry;
+                    if (resolved is not null && AudioCache.IsBetter(resolved, entry))
+                    {
+                        // The better file plays and, once it has run long enough, takes the cached one's place.
+                        _log.Info($"upgrade {track.Id} {track.Name}: {entry.SourceName ?? entry.ServedQuality} → {resolved.Quality}");
+                        local.Value.Source.Dispose();
+                        local.Value.Stream.Dispose();
+                        local = null;
+                    }
+                    else
+                    {
+                        // As good as this tier gets: not asked again until VIP improves once more.
+                        _audioCache.Confirm(track.Id, quality, _account.PlaybackVipType);
+                        prefetched?.Source?.Dispose();
+                        prefetched = null;
+                        resolved = null;
+                        _currentMediaReused = false;
+                    }
+                }
+                else if (resolved is null)
                 {
                     StatusMessage = $"《{track.Name}》没有可用的音源，已跳过";
                     _log.Warn($"no source for {track.Id} {track.Name}");
@@ -456,6 +482,25 @@ public sealed partial class PlayerService : ObservableObject
         return media;
     }
 
+    /// <summary>How long a lookup for a song that is cached already may take before the cached copy plays as it is.</summary>
+    private static readonly TimeSpan UpgradeLookupTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>The lookup behind an upgrade: brief, and any failure just means the cached file plays.</summary>
+    private async Task<ResolvedMedia?> ResolveForUpgradeAsync(Track track, CancellationToken ct)
+    {
+        using var brief = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        brief.CancelAfter(UpgradeLookupTimeout);
+        try
+        {
+            return await ResolveAsync(track, brief.Token);
+        }
+        catch (Exception error) when (!ct.IsCancellationRequested)
+        {
+            _log.Warn($"upgrade {track.Id}: {error.Message}");
+            return null;
+        }
+    }
+
     /// <summary>
     /// NetEase first, in the chosen quality, through whichever account <see cref="SongUrlResolver"/> picks;
     /// refusals and trials fall through to the gray-track sources.
@@ -463,11 +508,12 @@ public sealed partial class PlayerService : ObservableObject
     private async Task<ResolvedMedia?> ResolveFreshAsync(Track track, CancellationToken ct)
     {
         var quality = _settings.AudioQuality;
+        var tier = _account.PlaybackVipType;
         var lookup = await _songUrls.ResolveAsync(track, quality, ct);
         if (lookup is { Data.IsTrial: false })
         {
             return new ResolvedMedia(track.Id, new Uri(lookup.Data.Url!.Replace("http://", "https://")), null, lookup.Data.Level, quality,
-                DateTimeOffset.UtcNow, ViaSourceAccount: lookup.ViaSourceAccount);
+                DateTimeOffset.UtcNow, ViaSourceAccount: lookup.ViaSourceAccount, VipTier: tier);
         }
         if (!_settings.UnblockEnabled) return null;
         var resolved = await _unblock.ResolveAsync(UnblockTrack.From(track), quality, ct);
@@ -476,10 +522,10 @@ public sealed partial class PlayerService : ObservableObject
             // A 30-second trial is still better than nothing.
             return lookup is { } trial
                 ? new ResolvedMedia(track.Id, new Uri(trial.Data.Url!.Replace("http://", "https://")), null, "试听", quality,
-                    DateTimeOffset.UtcNow, IsTrial: true, ViaSourceAccount: trial.ViaSourceAccount)
+                    DateTimeOffset.UtcNow, IsTrial: true, ViaSourceAccount: trial.ViaSourceAccount, VipTier: tier)
                 : null;
         }
-        return new ResolvedMedia(track.Id, resolved.Url, resolved.SourceName, resolved.Format, quality, DateTimeOffset.UtcNow);
+        return new ResolvedMedia(track.Id, resolved.Url, resolved.SourceName, resolved.Format, quality, DateTimeOffset.UtcNow, VipTier: tier);
     }
 
     /// <summary>For the log: the gray-track source, or which NetEase account the link came from.</summary>
@@ -515,12 +561,18 @@ public sealed partial class PlayerService : ObservableObject
             _log.Info($"cache {track.Id}: 按流量计费的网络，跳过");
             return;
         }
-        if (_audioCache.Contains(track.Id, media.RequestedQuality) || _audioCache.IsDownloading(track.Id, media.RequestedQuality)) return;
+        // A cached copy is replaced only by a better one (an upgrade after VIP arrived), never fetched again as is.
+        var existing = _audioCache.Peek(track.Id, media.RequestedQuality);
+        if ((existing is not null && !AudioCache.IsBetter(media, existing)) || _audioCache.IsDownloading(track.Id, media.RequestedQuality)) return;
         await _cacheDownloads.WaitAsync();
         try
         {
-            var entry = await _audioCache.DownloadAsync(media);
-            if (entry is not null) _log.Info($"cached {track.Id} {track.Name} ({entry.Bytes >> 10} KB, {entry.ContentType})");
+            var entry = await _audioCache.DownloadAsync(media, replace: existing is not null);
+            if (entry is not null)
+            {
+                var replaced = existing is null ? "" : $", replacing {existing.SourceName ?? existing.ServedQuality}";
+                _log.Info($"cached {track.Id} {track.Name} ({entry.Bytes >> 10} KB, {entry.ContentType}){replaced}");
+            }
         }
         catch (Exception error)
         {
@@ -547,7 +599,8 @@ public sealed partial class PlayerService : ObservableObject
             return;
         }
         var quality = _settings.AudioQuality;
-        if (_settings.AudioCacheEnabled && _audioCache.Contains(next.Id, quality))
+        // A cached next song needs no prefetch, unless its copy predates VIP and may be bettered (see LoadTrackAsync).
+        if (_settings.AudioCacheEnabled && _audioCache.Peek(next.Id, quality) is { } cached && !AudioCache.IsUpgradable(cached, _account.PlaybackVipType))
         {
             DropPrefetch();
             return;

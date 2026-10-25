@@ -38,7 +38,10 @@ public static class AudioQualityExtensions
         _ => quality.ToString()
     };
 
-    public static AudioQuality FromLevel(string? level) => level switch
+    public static AudioQuality FromLevel(string? level) => ParseLevel(level) ?? AudioQuality.ExHigh;
+
+    /// <summary>The level as NetEase names it, or null for anything else (a format, a source's own word).</summary>
+    public static AudioQuality? ParseLevel(string? level) => level switch
     {
         "standard" => AudioQuality.Standard,
         "higher" => AudioQuality.Higher,
@@ -47,7 +50,7 @@ public static class AudioQualityExtensions
         "hires" => AudioQuality.HiRes,
         "sky" => AudioQuality.Sky,
         "jyeffect" => AudioQuality.JyEffect,
-        _ => AudioQuality.ExHigh
+        _ => null
     };
 
     public static bool IsLossless(this AudioQuality quality) => quality >= AudioQuality.Lossless;

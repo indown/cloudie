@@ -10,6 +10,11 @@ public readonly record struct AudioCacheKey(long TrackId, AudioQuality Quality)
 }
 
 /// <summary>One cached song: where it came from, what it is, how big, and when it was last played.</summary>
+/// <summary>
+/// One cached file. <see cref="Quality"/> is what was asked for, <see cref="ServedQuality"/> what came back;
+/// <see cref="VipTier"/> is the VIP tier at hand when it was fetched (0 in indexes written before it existed), which
+/// decides whether a copy that fell short is worth looking up again (<see cref="AudioCache.IsUpgradable"/>).
+/// </summary>
 public sealed record AudioCacheEntry(
     long TrackId,
     AudioQuality Quality,
@@ -18,7 +23,8 @@ public sealed record AudioCacheEntry(
     string ContentType,
     long Bytes,
     DateTimeOffset CreatedAt,
-    DateTimeOffset LastPlayedAt)
+    DateTimeOffset LastPlayedAt,
+    int VipTier = 0)
 {
     [JsonIgnore] public AudioCacheKey Key => new(TrackId, Quality);
 }
@@ -162,6 +168,16 @@ public sealed class AudioCache : IDisposable
         lock (_gate) return _inFlight.Contains(new AudioCacheKey(trackId, quality));
     }
 
+    /// <summary>The cached song without counting it as played (for looking ahead); null when there is none.</summary>
+    public AudioCacheEntry? Peek(long trackId, AudioQuality quality)
+    {
+        lock (_gate)
+        {
+            EnsureLoaded();
+            return _entries.GetValueOrDefault(new AudioCacheKey(trackId, quality));
+        }
+    }
+
     /// <summary>
     /// The cached song, marked as played now; null when there is none. An entry whose file has gone missing
     /// is dropped on the spot.
@@ -188,16 +204,17 @@ public sealed class AudioCache : IDisposable
     }
 
     /// <summary>
-    /// Downloads <paramref name="media"/> into the cache. Returns null when the song is already cached or
-    /// being downloaded; throws when the download fails, leaving no file behind.
+    /// Downloads <paramref name="media"/> into the cache. Returns null when the song is already cached (unless
+    /// <paramref name="replace"/> asks for the file to be swapped for this better one) or being downloaded; throws
+    /// when the download fails, leaving the cache as it was.
     /// </summary>
-    public async Task<AudioCacheEntry?> DownloadAsync(ResolvedMedia media, CancellationToken cancellationToken = default)
+    public async Task<AudioCacheEntry?> DownloadAsync(ResolvedMedia media, bool replace = false, CancellationToken cancellationToken = default)
     {
         var key = new AudioCacheKey(media.TrackId, media.RequestedQuality);
         lock (_gate)
         {
             EnsureLoaded();
-            if (_entries.ContainsKey(key) || !_inFlight.Add(key)) return null;
+            if ((!replace && _entries.ContainsKey(key)) || !_inFlight.Add(key)) return null;
         }
         var final = PathOf(key);
         var part = final + PartExtension;
@@ -246,7 +263,7 @@ public sealed class AudioCache : IDisposable
                               ?? AudioFormat.Mpeg;
             File.Move(part, final, overwrite: true);
             var now = _clock();
-            var entry = new AudioCacheEntry(media.TrackId, media.RequestedQuality, media.SourceName, media.Quality, contentType, written, now, now);
+            var entry = new AudioCacheEntry(media.TrackId, media.RequestedQuality, media.SourceName, media.Quality, contentType, written, now, now, media.VipTier);
             lock (_gate)
             {
                 if (_entries.TryGetValue(key, out var previous)) _total -= previous.Bytes;
@@ -268,6 +285,52 @@ public sealed class AudioCache : IDisposable
             lock (_gate) _inFlight.Remove(key);
         }
     }
+
+    /// <summary>
+    /// A fresh lookup at <paramref name="vipTier"/> found nothing better than the cached file: the tier is remembered,
+    /// so the song is not looked up again until VIP improves once more.
+    /// </summary>
+    public void Confirm(long trackId, AudioQuality quality, int vipTier)
+    {
+        var key = new AudioCacheKey(trackId, quality);
+        lock (_gate)
+        {
+            EnsureLoaded();
+            if (!_entries.TryGetValue(key, out var entry) || entry.VipTier >= vipTier) return;
+            _entries[key] = entry with { VipTier = vipTier };
+            SaveLocked();
+        }
+    }
+
+    // MARK: 升级 — a copy made before VIP was at hand
+
+    /// <summary>
+    /// True when <paramref name="entry"/> was fetched with less VIP than <paramref name="vipTier"/> and did not get
+    /// what was asked for: a NetEase file below the requested level (a non-VIP account is served a downgrade, not a
+    /// refusal) or a gray-track copy. Such a song is looked up once more before it plays from the cache.
+    /// </summary>
+    public static bool IsUpgradable(AudioCacheEntry entry, int vipTier) =>
+        vipTier > entry.VipTier && (entry.SourceName is not null || Rank(entry.ServedQuality) < (int)entry.Quality);
+
+    /// <summary>
+    /// True when a fresh NetEase answer beats the cached file: a higher level, or the same level where the cache holds
+    /// a third-party copy. Trials and gray-track answers never replace a cached file.
+    /// </summary>
+    public static bool IsBetter(ResolvedMedia media, AudioCacheEntry entry)
+    {
+        if (media.SourceName is not null || media.IsTrial) return false;
+        var fresh = Rank(media.Quality);
+        var cached = Rank(entry.ServedQuality);
+        return entry.SourceName is null ? fresh > cached : fresh >= cached;
+    }
+
+    /// <summary>Orders served qualities: NetEase levels as <see cref="AudioQuality"/>, formats by what they imply, unknown lowest.</summary>
+    internal static int Rank(string? servedQuality) => servedQuality switch
+    {
+        "flac" => (int)AudioQuality.Lossless,
+        "mp3" or "aac" or "m4a" => (int)AudioQuality.ExHigh,
+        _ => AudioQualityExtensions.ParseLevel(servedQuality) is { } level ? (int)level : -1
+    };
 
     public void Remove(long trackId, AudioQuality quality)
     {
