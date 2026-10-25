@@ -149,7 +149,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [ObservableProperty] public partial string CacheUsage { get; private set; } = string.Empty;
-    public string CacheLocation => AppPaths.CacheDirectory;
+    public string CacheLocation => _audioCache.Directory;
+    /// <summary>The cache was moved away from the default folder; "恢复默认" is offered.</summary>
+    public bool IsCustomCacheLocation => _settings.AudioCacheDirectory is not null;
 
     private void RefreshCacheUsage() =>
         CacheUsage = _audioCache.Count == 0 ? "还没有缓存的歌曲" : $"已缓存 {_audioCache.Count} 首，占用 {ByteText(_audioCache.TotalBytes)}";
@@ -168,8 +170,42 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task OpenCacheFolder()
     {
-        Directory.CreateDirectory(AppPaths.CacheDirectory);
-        await Windows.System.Launcher.LaunchFolderPathAsync(AppPaths.CacheDirectory);
+        Directory.CreateDirectory(_audioCache.Directory);
+        await Windows.System.Launcher.LaunchFolderPathAsync(_audioCache.Directory);
+    }
+
+    /// <summary>Lets the user pick a folder (a big D: drive, say); the cache goes into Cloudie\cache under it.</summary>
+    [RelayCommand]
+    private async Task ChangeCacheLocation()
+    {
+        if (App.MainWindow is null) return;
+        var picker = new Windows.Storage.Pickers.FolderPicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.ComputerFolder };
+        picker.FileTypeFilter.Add("*");   // required on desktop, or PickSingleFolderAsync throws
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow));
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is null) return;
+        // A folder that already is a Cloudie cache (moved here before) is used as is; anything else gets a subfolder.
+        var target = File.Exists(Path.Combine(folder.Path, "index.json")) ? folder.Path : Path.Combine(folder.Path, "Cloudie", "cache");
+        await MoveCacheAsync(target, custom: true);
+    }
+
+    [RelayCommand]
+    private Task ResetCacheLocation() => MoveCacheAsync(AppPaths.CacheDirectory, custom: false);
+
+    private async Task MoveCacheAsync(string target, bool custom)
+    {
+        if (!AudioCache.IsUsableDirectory(target))
+        {
+            App.Services.Status.Show($"无法写入 {target}，缓存位置未改变");
+            return;
+        }
+        var before = _audioCache.Count;
+        var moved = await Task.Run(() => _audioCache.Relocate(target));
+        _settings.AudioCacheDirectory = custom ? target : null;
+        OnPropertyChanged(nameof(CacheLocation));
+        OnPropertyChanged(nameof(IsCustomCacheLocation));
+        RefreshCacheUsage();
+        App.Services.Status.Show(before == 0 ? $"缓存位置已改为 {target}" : $"缓存位置已改为 {target}，已搬运 {moved} / {before} 首");
     }
 
     public string AccountName => _account.Profile?.Nickname ?? "未登录";

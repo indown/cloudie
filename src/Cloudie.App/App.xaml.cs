@@ -31,6 +31,7 @@ public partial class App : Application
         MainWindow = new MainWindow();
         MainWindow.ApplyTheme(theme);
         MainWindow.Activate();
+        if (Services.AudioCacheNotice is { } notice) Services.Status.Show(notice);
         if (Services.Settings.CheckUpdates) CheckForUpdatesLater(MainWindow);
     }
 

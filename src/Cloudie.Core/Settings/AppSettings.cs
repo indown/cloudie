@@ -26,6 +26,7 @@ public sealed class AppSettings(ISettingsStore store)
         public const string WindowPlacement = "window.placement";
         public const string AudioCacheEnabled = "cache.audio.enabled";
         public const string AudioCacheLimit = "cache.audio.limitBytes";
+        public const string AudioCacheDirectory = "cache.audio.directory";
     }
 
     public const long DefaultAudioCacheLimit = 1L << 30;
@@ -86,6 +87,13 @@ public sealed class AppSettings(ISettingsStore store)
     {
         get => Math.Max(MinimumAudioCacheLimit, Store.GetLong(Keys.AudioCacheLimit, DefaultAudioCacheLimit));
         set => Store.SetLong(Keys.AudioCacheLimit, Math.Max(MinimumAudioCacheLimit, value));
+    }
+
+    /// <summary>Where 歌曲缓存 lives when the user moved it; null means the default under the app's data folder.</summary>
+    public string? AudioCacheDirectory
+    {
+        get => Store.GetString(Keys.AudioCacheDirectory);
+        set => Store.SetString(Keys.AudioCacheDirectory, string.IsNullOrWhiteSpace(value) ? null : value.Trim());
     }
 
     /// <summary>Last window bounds; null until the window has been moved or closed once.</summary>

@@ -135,6 +135,41 @@ public sealed class AudioCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task Relocate_moves_the_files_and_the_index_and_the_old_folder_is_left_empty()
+    {
+        using var cache = Cache(Server(new() { ["/a"] = Mp3(100), ["/b"] = Mp3(200) }));
+        await cache.DownloadAsync(Media(1, "/a"));
+        await cache.DownloadAsync(Media(2, "/b"));
+        var target = Path.Combine(_dir, "moved", "cache");
+        var changes = 0;
+        cache.Changed += () => changes++;
+        Assert.Equal(2, cache.Relocate(target));
+        Assert.Equal(1, changes);
+        Assert.Equal(target, cache.Directory);
+        Assert.StartsWith(target, cache.PathOf(new AudioCacheKey(1, AudioQuality.ExHigh)));
+        Assert.True(File.Exists(cache.PathOf(new AudioCacheKey(1, AudioQuality.ExHigh))));
+        Assert.Empty(Directory.GetFiles(_dir, "*.cache"));
+        Assert.False(File.Exists(Path.Combine(_dir, "index.json")));
+        Assert.Equal(2, cache.Relocate(target));   // same place again: nothing to do
+        using var reloaded = new AudioCache(target, () => _limit, Server(new()), () => _now);
+        Assert.Equal(2, reloaded.Count);
+        Assert.Equal(300, reloaded.TotalBytes);
+        Assert.NotNull(reloaded.TryGet(2, AudioQuality.ExHigh));
+    }
+
+    [Fact]
+    public void A_usable_directory_is_writable_and_rooted()
+    {
+        Assert.True(AudioCache.IsUsableDirectory(Path.Combine(_dir, "probe")));
+        Assert.Empty(Directory.GetFiles(Path.Combine(_dir, "probe")));   // the probe file is gone again
+        var file = Path.Combine(_dir, "file");
+        File.WriteAllText(file, "x");
+        Assert.False(AudioCache.IsUsableDirectory(Path.Combine(file, "sub")));   // a file where a folder must be
+        Assert.False(AudioCache.IsUsableDirectory("relative/cache"));
+        Assert.False(AudioCache.IsUsableDirectory(" "));
+    }
+
+    [Fact]
     public void Caching_starts_after_thirty_seconds_or_past_the_halfway_point()
     {
         Assert.False(AudioCache.ShouldStartCaching(TimeSpan.FromSeconds(29), TimeSpan.FromMinutes(4)));
@@ -195,5 +230,10 @@ public sealed class AudioCacheTests : IDisposable
         Assert.Equal(AppSettings.MinimumAudioCacheLimit, settings.AudioCacheLimitBytes);
         settings.AudioCacheEnabled = false;
         Assert.False(settings.AudioCacheEnabled);
+        Assert.Null(settings.AudioCacheDirectory);
+        settings.AudioCacheDirectory = @"  D:\Cloudie\cache  ";
+        Assert.Equal(@"D:\Cloudie\cache", settings.AudioCacheDirectory);
+        settings.AudioCacheDirectory = "";
+        Assert.Null(settings.AudioCacheDirectory);
     }
 }

@@ -48,7 +48,7 @@ public sealed class AudioCache : IDisposable
 
     private sealed record Index(List<AudioCacheEntry> Entries);
 
-    private readonly string _directory;
+    private string _directory;
     private readonly Func<long> _limitBytes;
     private readonly Func<DateTimeOffset> _clock;
     private readonly HttpClient _http;
@@ -73,7 +73,65 @@ public sealed class AudioCache : IDisposable
     public static bool ShouldStartCaching(TimeSpan position, TimeSpan duration) =>
         position >= MinimumPlayedBeforeCaching || (duration > TimeSpan.Zero && position >= duration / 2);
 
-    public string Directory => _directory;
+    /// <summary>True when the folder exists (or can be created) and a file can be written there: the test a chosen location must pass.</summary>
+    public static bool IsUsableDirectory(string path)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path)) return false;
+            System.IO.Directory.CreateDirectory(path);
+            var probe = Path.Combine(path, ".probe-" + Guid.NewGuid().ToString("N"));
+            File.WriteAllBytes(probe, []);
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Where the files are now; changes with <see cref="Relocate"/>.</summary>
+    public string Directory
+    {
+        get { lock (_gate) return _directory; }
+    }
+
+    /// <summary>
+    /// Moves the cache to <paramref name="directory"/>: every file, then the index. A file that cannot be
+    /// moved is dropped from the cache rather than left behind. Returns how many songs made the move.
+    /// </summary>
+    public int Relocate(string directory)
+    {
+        int moved;
+        lock (_gate)
+        {
+            EnsureLoaded();
+            var target = Path.GetFullPath(directory);
+            if (string.Equals(target, Path.GetFullPath(_directory), StringComparison.OrdinalIgnoreCase)) return _entries.Count;
+            System.IO.Directory.CreateDirectory(target);
+            var previous = _directory;
+            moved = 0;
+            foreach (var (key, entry) in _entries.ToList())
+            {
+                try
+                {
+                    File.Move(Path.Combine(previous, key.FileStem + FileExtension), Path.Combine(target, key.FileStem + FileExtension), overwrite: true);
+                    moved++;
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    _entries.Remove(key);
+                    _total -= entry.Bytes;
+                }
+            }
+            _directory = target;
+            SaveLocked();
+            TryDelete(Path.Combine(previous, IndexName));
+        }
+        Changed?.Invoke();
+        return moved;
+    }
 
     /// <summary>Raised after the contents changed (a song added, removed or everything cleared); any thread.</summary>
     public event Action? Changed;

@@ -49,7 +49,7 @@ cmd_run() {
   # Launched straight through WSL interop, detached from this shell. stdout/stderr land in files on the Linux side,
   # so a managed stack overflow (which .NET prints before aborting) is kept: see `stderr`. PowerShell's
   # Start-Process with redirection never returned under interop, and cmd's `start` hung.
-  (cd "$OUT" && setsid nohup "$OUT/Cloudie.exe" >"$SHOTS/stdout.txt" 2>"$SHOTS/stderr.txt" </dev/null &)
+  (cd "$OUT" && setsid -f nohup "$OUT/Cloudie.exe" >"$SHOTS/stdout.txt" 2>"$SHOTS/stderr.txt" </dev/null)
   echo "started $OUT/Cloudie.exe"
 }
 

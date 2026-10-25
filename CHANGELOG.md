@@ -66,7 +66,9 @@
   file disappeared; `ResolvedMediaCache` remembers resolved links for ten minutes so a repeat or a jump back
   skips the lookup. Downloads are skipped on metered connections and for trials; a cache file that fails to
   play is removed and the song streams instead. Settings gets a 歌曲缓存 section (toggle, limit, usage,
-  open folder, clear). The player bar and now-playing page mark cached playback with 已缓存. 77 unit tests.
+  open folder, clear) and a 缓存位置 card: a folder picker moves the cache (files and index) to e.g. a big D:
+  drive under `Cloudie\cache`, 恢复默认 moves it back, and a chosen folder that is unusable at start-up
+  (unplugged or locked drive) falls back to the default for that session with a status-bar notice. The player bar and now-playing page mark cached playback with 已缓存. 77 unit tests.
 - App: scrubbing the scrollbar of a long list queued a cover download for every row passed, so the rows you
   landed on waited behind hundreds of requests. Row covers now load in `x:Phase` 2 (album text in phase 1),
   which the ListView skips for rows recycled before they settle, and `CoverCache` keeps decoded covers in a

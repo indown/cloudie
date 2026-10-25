@@ -37,7 +37,9 @@ Notes for anyone (human or agent) continuing this code base.
   named `_` turns `_ = SomeAsync()` into an assignment to that parameter (name it `sender`). Compile errors from CI
   are listed in the job summary and in the check-run annotations (packed, since GitHub shows ten per step).
 - 歌曲缓存 (`AudioCache`, Core) stores whole files as `cache\{trackId}-{quality}.cache` plus `index.json`, keyed by the
-  quality the user asked for. Playback opens them with `MediaSource.CreateFromStream` and a MIME type from
+  quality the user asked for. The folder defaults to `%LOCALAPPDATA%\Cloudie\cache` and can be moved
+  (`AudioCache.Relocate`; `cache.audio.directory` in settings); `AppServices` falls back to the default when the
+  configured folder fails `AudioCache.IsUsableDirectory` at start-up. Playback opens them with `MediaSource.CreateFromStream` and a MIME type from
   `AudioFormat` (magic bytes first: CDNs answer `application/octet-stream`); the file is opened with
   `FileShare.Delete` so eviction can remove a song while it plays. Fill happens from `PlayerService.Tick` after
   `AudioCache.ShouldStartCaching`, one download at a time, never on a metered connection or for a trial.
