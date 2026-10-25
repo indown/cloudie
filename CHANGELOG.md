@@ -58,6 +58,15 @@
   seconds); a queue with nothing playable no longer cycles forever.
 - App: the home page loaded signed out at start-up and again a second later once the session was restored; the
   theme brushes now live inside the theme dictionaries so controls stop mixing light and dark values.
+- App / Core: 歌曲缓存. A song that has played thirty seconds (or half its length) is copied in the background
+  to `%LOCALAPPDATA%\Cloudie\cache` (`*.cache` plus `index.json`); the next play opens the file through
+  `MediaSource.CreateFromStream` with a MIME type sniffed from the bytes, so no network is touched and the
+  prefetch stands down. `AudioCache` (Core) bounds the store by bytes (1 GB default, options 512 MB to 10 GB),
+  evicts least recently played first, verifies Content-Length, cleans up partial files and drops entries whose
+  file disappeared; `ResolvedMediaCache` remembers resolved links for ten minutes so a repeat or a jump back
+  skips the lookup. Downloads are skipped on metered connections and for trials; a cache file that fails to
+  play is removed and the song streams instead. Settings gets a 歌曲缓存 section (toggle, limit, usage,
+  open folder, clear). The player bar and now-playing page mark cached playback with 已缓存. 77 unit tests.
 - App: scrubbing the scrollbar of a long list queued a cover download for every row passed, so the rows you
   landed on waited behind hundreds of requests. Row covers now load in `x:Phase` 2 (album text in phase 1),
   which the ListView skips for rows recycled before they settle, and `CoverCache` keeps decoded covers in a

@@ -14,6 +14,8 @@ public static class AppPaths
     public static string LogFile => Path.Combine(DataDirectory, "cloudie.log");
     public static string QueueFile => Path.Combine(DataDirectory, "queue.json");
     public static string PositionFile => Path.Combine(DataDirectory, "playback.json");
+    /// <summary>歌曲缓存: downloaded songs (<c>*.cache</c>) and their <c>index.json</c>.</summary>
+    public static string CacheDirectory => Path.Combine(DataDirectory, "cache");
 
     public static void Ensure() => Directory.CreateDirectory(DataDirectory);
 }

@@ -24,7 +24,14 @@ public sealed class AppSettings(ISettingsStore store)
         public const string Scrobble = "playback.scrobble";
         public const string CheckUpdates = "app.checkUpdates";
         public const string WindowPlacement = "window.placement";
+        public const string AudioCacheEnabled = "cache.audio.enabled";
+        public const string AudioCacheLimit = "cache.audio.limitBytes";
     }
+
+    public const long DefaultAudioCacheLimit = 1L << 30;
+    public const long MinimumAudioCacheLimit = 64L << 20;
+    /// <summary>The choices offered in Settings for the song cache size.</summary>
+    public static readonly IReadOnlyList<long> AudioCacheLimitOptions = [512L << 20, 1L << 30, 2L << 30, 5L << 30, 10L << 30];
 
     public static readonly IReadOnlyList<string> DefaultSourceOrder = [PyncmdAudioSource.SourceId, SubsonicAudioSource.SourceId];
 
@@ -65,6 +72,20 @@ public sealed class AppSettings(ISettingsStore store)
     {
         get => Store.GetBool(Keys.CheckUpdates, true);
         set => Store.SetBool(Keys.CheckUpdates, value);
+    }
+
+    /// <summary>歌曲缓存: keep played songs on disk and play them from there next time.</summary>
+    public bool AudioCacheEnabled
+    {
+        get => Store.GetBool(Keys.AudioCacheEnabled, true);
+        set => Store.SetBool(Keys.AudioCacheEnabled, value);
+    }
+
+    /// <summary>Upper bound of the song cache in bytes; never below <see cref="MinimumAudioCacheLimit"/>.</summary>
+    public long AudioCacheLimitBytes
+    {
+        get => Math.Max(MinimumAudioCacheLimit, Store.GetLong(Keys.AudioCacheLimit, DefaultAudioCacheLimit));
+        set => Store.SetLong(Keys.AudioCacheLimit, Math.Max(MinimumAudioCacheLimit, value));
     }
 
     /// <summary>Last window bounds; null until the window has been moved or closed once.</summary>

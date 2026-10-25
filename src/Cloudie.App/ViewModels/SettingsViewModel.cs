@@ -2,18 +2,34 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Cloudie.App.Services;
 using Cloudie.Core.Netease;
+using Cloudie.Core.Playback;
 using Cloudie.Core.Settings;
 using Cloudie.Core.Unblock;
+using Microsoft.UI.Dispatching;
 
 namespace Cloudie.App.ViewModels;
 
 public sealed record QualityOption(AudioQuality Value, string Name);
 public sealed record ThemeOption(AppTheme Value, string Name);
+public sealed record CacheLimitOption(long Bytes, string Name);
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly AppSettings _settings = App.Services.Settings;
     private readonly AccountService _account = App.Services.Account;
+    private readonly AudioCache _audioCache = App.Services.AudioCache;
+    private readonly DispatcherQueue _dispatcher = DispatcherQueue.GetForCurrentThread();
+    private readonly Action _cacheChanged;
+
+    public SettingsViewModel()
+    {
+        _cacheChanged = () => _dispatcher.TryEnqueue(RefreshCacheUsage);
+        _audioCache.Changed += _cacheChanged;
+        RefreshCacheUsage();
+    }
+
+    /// <summary>The page is leaving: stop listening to the cache.</summary>
+    public void Detach() => _audioCache.Changed -= _cacheChanged;
 
     public IReadOnlyList<QualityOption> Qualities { get; } =
         new[] { AudioQuality.Standard, AudioQuality.ExHigh, AudioQuality.Lossless, AudioQuality.HiRes }
@@ -108,6 +124,53 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     public string NavidromeStatus => _settings.SubsonicConfiguration is null ? "未配置：填写地址、用户名和密码" : "已配置";
+
+    // MARK: 歌曲缓存
+
+    public bool AudioCacheEnabled
+    {
+        get => _settings.AudioCacheEnabled;
+        set { _settings.AudioCacheEnabled = value; OnPropertyChanged(); }
+    }
+
+    public IReadOnlyList<CacheLimitOption> CacheLimits { get; } =
+        AppSettings.AudioCacheLimitOptions.Select(static bytes => new CacheLimitOption(bytes, ByteText(bytes))).ToList();
+
+    public CacheLimitOption SelectedCacheLimit
+    {
+        get => CacheLimits.FirstOrDefault(o => o.Bytes == _settings.AudioCacheLimitBytes) ?? CacheLimits[1];
+        set
+        {
+            if (value is null || value.Bytes == _settings.AudioCacheLimitBytes) return;   // same-value guard: see SelectedTheme
+            _settings.AudioCacheLimitBytes = value.Bytes;
+            _audioCache.Trim();
+            OnPropertyChanged();
+        }
+    }
+
+    [ObservableProperty] public partial string CacheUsage { get; private set; } = string.Empty;
+    public string CacheLocation => AppPaths.CacheDirectory;
+
+    private void RefreshCacheUsage() =>
+        CacheUsage = _audioCache.Count == 0 ? "还没有缓存的歌曲" : $"已缓存 {_audioCache.Count} 首，占用 {ByteText(_audioCache.TotalBytes)}";
+
+    private static string ByteText(long bytes) =>
+        bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):0.#} GB" : $"{bytes / (double)(1L << 20):0} MB";
+
+    [RelayCommand]
+    private void ClearCache()
+    {
+        _audioCache.Clear();
+        RefreshCacheUsage();
+        App.Services.Status.Show("已清空歌曲缓存");
+    }
+
+    [RelayCommand]
+    private async Task OpenCacheFolder()
+    {
+        Directory.CreateDirectory(AppPaths.CacheDirectory);
+        await Windows.System.Launcher.LaunchFolderPathAsync(AppPaths.CacheDirectory);
+    }
 
     public string AccountName => _account.Profile?.Nickname ?? "未登录";
     public bool IsLoggedIn => _account.IsLoggedIn;

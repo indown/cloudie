@@ -49,6 +49,9 @@ $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
 $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
 if ($Crop) {
     $c = $Crop.Split(",") | ForEach-Object { [int]$_ }
+    # Clamp to the window: GDI+ reports a rectangle outside the bitmap as "Out of memory".
+    $c[0] = [Math]::Max(0, [Math]::Min($c[0], $width - 1)); $c[1] = [Math]::Max(0, [Math]::Min($c[1], $height - 1))
+    $c[2] = [Math]::Min($c[2], $width - $c[0]); $c[3] = [Math]::Min($c[3], $height - $c[1])
     $part = $bitmap.Clone((New-Object System.Drawing.Rectangle $c[0], $c[1], $c[2], $c[3]), $bitmap.PixelFormat)
     $zoom = New-Object System.Drawing.Bitmap ($c[2] * 2), ($c[3] * 2)
     $g2 = [System.Drawing.Graphics]::FromImage($zoom)

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices.WindowsRuntime;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Cloudie.Core.Lyrics;
 using Cloudie.Core.Netease;
@@ -25,6 +26,11 @@ public sealed partial class PlayerService : ObservableObject
     private readonly AppSettings _settings;
     private readonly AccountService _account;
     private readonly LogService _log;
+    private readonly AudioCache _audioCache;
+    /// <summary>Recently resolved links, so a song played again soon skips the lookup.</summary>
+    private readonly ResolvedMediaCache _resolved = new();
+    /// <summary>Background copies into 歌曲缓存 run one at a time.</summary>
+    private readonly SemaphoreSlim _cacheDownloads = new(1, 1);
     private readonly MediaPlayer _player = new();
     private readonly DispatcherQueue _dispatcher = DispatcherQueue.GetForCurrentThread();
     private readonly DispatcherQueueTimer _ticker;
@@ -46,6 +52,13 @@ public sealed partial class PlayerService : ObservableObject
     private ResolvedMedia? _currentMedia;
     /// <summary>True when the current source was opened ahead of time; a failure then gets one cold retry.</summary>
     private bool _currentWasPreopened;
+    /// <summary>The open cache file behind the current source, disposed with it.</summary>
+    private FileStream? _currentStream;
+    private bool _currentIsCached;
+    /// <summary>The current link came from <see cref="_resolved"/>; a failure re-resolves instead of skipping.</summary>
+    private bool _currentMediaReused;
+    /// <summary>Set once the current song has been handed to the cache, so Tick asks only once.</summary>
+    private bool _cacheRequested;
     /// <summary>The load generation whose source is in the player, and the one whose failure was already handled.</summary>
     private int _sourceGeneration;
     private int _failedGeneration;
@@ -73,10 +86,11 @@ public sealed partial class PlayerService : ObservableObject
         public bool IsStale => DateTimeOffset.UtcNow - StartedAt > ResolvedMedia.Lifetime;
     }
 
-    public PlayerService(NeteaseApi api, UnblockService unblock, AppSettings settings, AccountService account, LogService log, PlaybackStore store)
+    public PlayerService(NeteaseApi api, UnblockService unblock, AppSettings settings, AccountService account, LogService log, PlaybackStore store, AudioCache audioCache)
     {
         _api = api;
         _store = store;
+        _audioCache = audioCache;
         _unblock = unblock;
         _settings = settings;
         _account = account;
@@ -126,6 +140,8 @@ public sealed partial class PlayerService : ObservableObject
     [ObservableProperty] public partial int ActiveLyricIndex { get; private set; } = -1;
     [ObservableProperty] public partial string? UnblockSource { get; private set; }
     [ObservableProperty] public partial string? ServedQuality { get; private set; }
+    /// <summary>The current song plays from 歌曲缓存 rather than the network.</summary>
+    [ObservableProperty] public partial bool IsCached { get; private set; }
     [ObservableProperty] public partial string? StatusMessage { get; set; }
     [ObservableProperty] public partial bool IsShuffled { get; private set; }
     [ObservableProperty] public partial RepeatMode RepeatMode { get; private set; }
@@ -258,7 +274,13 @@ public sealed partial class PlayerService : ObservableObject
         _player.Source = null;
         _currentSource?.Dispose();
         _currentSource = null;
+        _currentStream?.Dispose();
+        _currentStream = null;
         _currentWasPreopened = false;
+        _currentIsCached = false;
+        _currentMediaReused = false;
+        _cacheRequested = false;
+        IsCached = false;
         _resumedAt = resumeAt;
         _playbackStarted = false;
         CurrentTrack = track;
@@ -274,35 +296,50 @@ public sealed partial class PlayerService : ObservableObject
         IsLoading = true;
         try
         {
-            // A restored session seeks after MediaOpened, so it always opens its stream itself.
-            var prefetched = resumeAt is null ? await TakePrefetchedAsync(track, cts.Token) : null;
-            var resolved = prefetched?.Media ?? ReuseCurrentMedia(track) ?? await ResolveAsync(track, cts.Token);
-            if (generation != _loadGeneration)
+            var quality = _settings.AudioQuality;
+            // 歌曲缓存 first: a song on disk needs no network at all.
+            var local = _settings.AudioCacheEnabled ? OpenCached(track, quality) : null;
+            ResolvedMedia? resolved = null;
+            (ResolvedMedia Media, MediaSource? Source)? prefetched = null;
+            if (local is null)
             {
-                prefetched?.Source?.Dispose();
-                return;
-            }
-            if (resolved is null)
-            {
-                StatusMessage = $"《{track.Name}》没有可用的音源，已跳过";
-                _log.Warn($"no source for {track.Id} {track.Name}");
-                await SkipUnplayableAsync();
-                return;
+                // A restored session seeks after MediaOpened, so it always opens its stream itself.
+                prefetched = resumeAt is null ? await TakePrefetchedAsync(track, cts.Token) : null;
+                var remembered = prefetched is null ? _resolved.TryGet(track.Id, quality, DateTimeOffset.UtcNow) : null;
+                _currentMediaReused = remembered is not null;
+                resolved = prefetched?.Media ?? remembered ?? await ResolveAsync(track, cts.Token);
+                if (generation != _loadGeneration)
+                {
+                    prefetched?.Source?.Dispose();
+                    return;
+                }
+                if (resolved is null)
+                {
+                    StatusMessage = $"《{track.Name}》没有可用的音源，已跳过";
+                    _log.Warn($"no source for {track.Id} {track.Name}");
+                    await SkipUnplayableAsync();
+                    return;
+                }
             }
             _skipsInARow = 0;
-            UnblockSource = resolved.SourceName;
-            ServedQuality = resolved.Quality;
+            UnblockSource = local?.Entry.SourceName ?? resolved?.SourceName;
+            ServedQuality = local?.Entry.ServedQuality ?? resolved?.Quality;
             _pendingSeek = resumeAt is { } seek && seek > TimeSpan.FromSeconds(1) ? seek : null;
-            _currentSource = prefetched?.Source ?? MediaSource.CreateFromUri(resolved.Url);
+            _currentStream = local?.Stream;
+            _currentSource = local?.Source ?? prefetched?.Source ?? MediaSource.CreateFromUri(resolved!.Url);
             _currentMedia = resolved;
+            _currentIsCached = local is not null;
+            IsCached = _currentIsCached;
             _currentWasPreopened = prefetched?.Source is not null;
             _sourceGeneration = generation;
             _player.Source = _currentSource;
             _playbackStarted = true;
             _player.Play();
             UpdateTransportMetadata(track);
-            var how = prefetched is null ? "" : _currentWasPreopened ? " [预热: 链接+流]" : " [预热: 链接]";
-            _log.Info($"now playing {track.Id} {track.Name} via {resolved.SourceName ?? "netease"} ({resolved.Quality}){how}");
+            var how = local is not null ? " [缓存]"
+                : prefetched is not null ? (_currentWasPreopened ? " [预热: 链接+流]" : " [预热: 链接]")
+                : _currentMediaReused ? " [链接复用]" : "";
+            _log.Info($"now playing {track.Id} {track.Name} via {UnblockSource ?? "netease"} ({ServedQuality}){how}");
             _ = LoadLyricsAsync(track, generation, cts.Token);
             if ((IsFm || IsHeartMode) && Queue.CurrentIndex >= Queue.Count - 1) _ = TopUpAsync();
             PrefetchNext();
@@ -333,13 +370,24 @@ public sealed partial class PlayerService : ObservableObject
         _failedGeneration = generation;
         var preopened = _currentWasPreopened;
         var resumedAt = _resumedAt;
+        var cached = _currentIsCached;
+        var reused = _currentMediaReused;
         await Task.Delay(TimeSpan.FromMilliseconds(500));
         if (generation != _loadGeneration) return;   // the user moved on meanwhile
         _playReported = true;   // a song that failed to play is not a listen, whatever position it claims
-        if (preopened)
+        if (cached)
         {
-            // The stream opened ahead of time may have gone stale; load the song again from scratch.
-            _log.Warn($"播放失败 (预热的流): {detail}，重新加载");
+            // A damaged or unreadable cache file: forget it and stream the song instead.
+            _log.Warn($"播放失败 (缓存文件): {detail}，删除缓存并改从网络播放");
+            if (CurrentTrack is { } track) _audioCache.Remove(track.Id, _settings.AudioQuality);
+            await PlayCurrentAsync();
+            return;
+        }
+        if (CurrentTrack is { } failed) _resolved.Forget(failed.Id);
+        if (preopened || reused)
+        {
+            // A stream opened ahead of time, or a remembered link, may have gone stale; resolve again from scratch.
+            _log.Warn($"播放失败 ({(preopened ? "预热的流" : "复用的链接")}): {detail}，重新加载");
             await PlayCurrentAsync();
             return;
         }
@@ -398,8 +446,16 @@ public sealed partial class PlayerService : ObservableObject
         });
     }
 
-    /// <summary>NetEase first, in the chosen quality; refusals and trials fall through to the gray-track sources.</summary>
+    /// <summary>A fresh lookup, remembered for a while (see <see cref="ResolvedMediaCache"/>).</summary>
     private async Task<ResolvedMedia?> ResolveAsync(Track track, CancellationToken ct)
+    {
+        var media = await ResolveFreshAsync(track, ct);
+        if (media is not null) _resolved.Remember(media);
+        return media;
+    }
+
+    /// <summary>NetEase first, in the chosen quality; refusals and trials fall through to the gray-track sources.</summary>
+    private async Task<ResolvedMedia?> ResolveFreshAsync(Track track, CancellationToken ct)
     {
         var quality = _settings.AudioQuality;
         SongUrlData? data = null;
@@ -421,15 +477,57 @@ public sealed partial class PlayerService : ObservableObject
         {
             // A 30-second trial is still better than nothing.
             return data?.Url is { Length: > 0 } trial
-                ? new ResolvedMedia(track.Id, new Uri(trial.Replace("http://", "https://")), null, "试听", quality, DateTimeOffset.UtcNow)
+                ? new ResolvedMedia(track.Id, new Uri(trial.Replace("http://", "https://")), null, "试听", quality, DateTimeOffset.UtcNow, IsTrial: true)
                 : null;
         }
         return new ResolvedMedia(track.Id, resolved.Url, resolved.SourceName, resolved.Format, quality, DateTimeOffset.UtcNow);
     }
 
-    /// <summary>Repeat-one plays the same song again: its link is still good, so no lookup is needed.</summary>
-    private ResolvedMedia? ReuseCurrentMedia(Track track) =>
-        _currentMedia is { } media && media.IsUsable(track.Id, _settings.AudioQuality, DateTimeOffset.UtcNow) ? media : null;
+    // MARK: 歌曲缓存
+
+    /// <summary>The cached file as a media source, or null (an unreadable file is dropped from the cache).</summary>
+    private (AudioCacheEntry Entry, FileStream Stream, MediaSource Source)? OpenCached(Track track, AudioQuality quality)
+    {
+        var entry = _audioCache.TryGet(track.Id, quality);
+        if (entry is null) return null;
+        try
+        {
+            // FileShare.Delete lets the cache evict this file while it plays; the data stays readable until closed.
+            var stream = new FileStream(_audioCache.PathOf(entry.Key), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 1 << 16);
+            return (entry, stream, MediaSource.CreateFromStream(stream.AsRandomAccessStream(), entry.ContentType));
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _log.Warn($"cache {track.Id}: {error.Message}");
+            _audioCache.Remove(track.Id, quality);
+            return null;
+        }
+    }
+
+    /// <summary>Copies the song now playing into 歌曲缓存 in the background; one at a time, never on a metered connection.</summary>
+    private async Task CacheAsync(ResolvedMedia media, Track track)
+    {
+        if (NetworkStatus.IsMetered())
+        {
+            _log.Info($"cache {track.Id}: 按流量计费的网络，跳过");
+            return;
+        }
+        if (_audioCache.Contains(track.Id, media.RequestedQuality) || _audioCache.IsDownloading(track.Id, media.RequestedQuality)) return;
+        await _cacheDownloads.WaitAsync();
+        try
+        {
+            var entry = await _audioCache.DownloadAsync(media);
+            if (entry is not null) _log.Info($"cached {track.Id} {track.Name} ({entry.Bytes >> 10} KB, {entry.ContentType})");
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"cache {track.Id}: {error.Message}");
+        }
+        finally
+        {
+            _cacheDownloads.Release();
+        }
+    }
 
     // MARK: 歌曲预热
 
@@ -446,6 +544,11 @@ public sealed partial class PlayerService : ObservableObject
             return;
         }
         var quality = _settings.AudioQuality;
+        if (_settings.AudioCacheEnabled && _audioCache.Contains(next.Id, quality))
+        {
+            DropPrefetch();
+            return;
+        }
         if (_prefetch is { } existing)
         {
             if (existing.TrackId == next.Id && existing.Quality == quality && !existing.IsStale) return;
@@ -460,6 +563,7 @@ public sealed partial class PlayerService : ObservableObject
     {
         try
         {
+            if (_resolved.TryGet(track.Id, _settings.AudioQuality, DateTimeOffset.UtcNow) is { } remembered) return remembered;
             await Task.Delay(PrefetchDelay, ct);
             ResolvedMedia? media;
             try
@@ -575,6 +679,12 @@ public sealed partial class PlayerService : ObservableObject
         var index = Lyrics.ActiveIndex(Position);
         if (index != ActiveLyricIndex) ActiveLyricIndex = index;
         if (IsPlaying && DateTime.UtcNow - _lastPositionSave > TimeSpan.FromSeconds(10)) SavePosition();
+        if (_playbackStarted && !_currentIsCached && !_cacheRequested && _currentMedia is { IsTrial: false } playing
+            && _settings.AudioCacheEnabled && AudioCache.ShouldStartCaching(Position, Duration))
+        {
+            _cacheRequested = true;
+            _ = CacheAsync(playing, CurrentTrack);
+        }
         if (IsPlaying && Duration > TimeSpan.Zero && Duration - Position < PreopenBeforeEnd)
         {
             if (_prefetch is null || _prefetch.IsStale) PrefetchNext();

@@ -36,6 +36,11 @@ Notes for anyone (human or agent) continuing this code base.
   `x:Bind` (microsoft-ui-xaml #4966), so expose a `Visibility` property instead; a lambda whose single parameter is
   named `_` turns `_ = SomeAsync()` into an assignment to that parameter (name it `sender`). Compile errors from CI
   are listed in the job summary and in the check-run annotations (packed, since GitHub shows ten per step).
+- 歌曲缓存 (`AudioCache`, Core) stores whole files as `cache\{trackId}-{quality}.cache` plus `index.json`, keyed by the
+  quality the user asked for. Playback opens them with `MediaSource.CreateFromStream` and a MIME type from
+  `AudioFormat` (magic bytes first: CDNs answer `application/octet-stream`); the file is opened with
+  `FileShare.Delete` so eviction can remove a song while it plays. Fill happens from `PlayerService.Tick` after
+  `AudioCache.ShouldStartCaching`, one download at a time, never on a metered connection or for a trial.
 - Settings, cookies and the log live in `%LOCALAPPDATA%\Cloudie` (`AppPaths`), not in ApplicationData, so the app
   runs unpackaged; `.github/workflows/build.yml` publishes unpackaged self-contained zips for x64 and ARM64 on every
   push and is the quickest way to compile the WinUI project without a Windows machine.

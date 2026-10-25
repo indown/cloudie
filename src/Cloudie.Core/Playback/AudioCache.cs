@@ -1,0 +1,346 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Cloudie.Core.Netease;
+
+namespace Cloudie.Core.Playback;
+
+public readonly record struct AudioCacheKey(long TrackId, AudioQuality Quality)
+{
+    public string FileStem => $"{TrackId}-{Quality.ToString().ToLowerInvariant()}";
+}
+
+/// <summary>One cached song: where it came from, what it is, how big, and when it was last played.</summary>
+public sealed record AudioCacheEntry(
+    long TrackId,
+    AudioQuality Quality,
+    string? SourceName,
+    string? ServedQuality,
+    string ContentType,
+    long Bytes,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset LastPlayedAt)
+{
+    [JsonIgnore] public AudioCacheKey Key => new(TrackId, Quality);
+}
+
+/// <summary>
+/// Songs kept on disk after they were played (歌曲缓存), so the next play needs no network. Files live under
+/// one directory with a non-audio extension; <c>index.json</c> beside them records what each file is. The
+/// cache is bounded by a byte limit: least recently played out first, never the one just added or played.
+/// Thread-safe; downloads run on the caller's thread pool context, the index is guarded by a lock.
+/// </summary>
+public sealed class AudioCache : IDisposable
+{
+    public const string FileExtension = ".cache";
+    private const string PartExtension = ".part";
+    private const string IndexName = "index.json";
+
+    /// <summary>A song is cached once it has played this long, or past its halfway point, so skips cost nothing.</summary>
+    public static readonly TimeSpan MinimumPlayedBeforeCaching = TimeSpan.FromSeconds(30);
+    /// <summary>A download with no bytes for this long is abandoned.</summary>
+    public static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() }
+    };
+
+    private sealed record Index(List<AudioCacheEntry> Entries);
+
+    private readonly string _directory;
+    private readonly Func<long> _limitBytes;
+    private readonly Func<DateTimeOffset> _clock;
+    private readonly HttpClient _http;
+    private readonly object _gate = new();
+    private readonly Dictionary<AudioCacheKey, AudioCacheEntry> _entries = new();
+    private readonly HashSet<AudioCacheKey> _inFlight = new();
+    private long _total;
+    private bool _loaded;
+
+    public AudioCache(string directory, Func<long> limitBytes, HttpMessageHandler? handler = null, Func<DateTimeOffset>? clock = null)
+    {
+        _directory = directory;
+        _limitBytes = limitBytes;
+        _clock = clock ?? (static () => DateTimeOffset.UtcNow);
+        _http = new HttpClient(handler ?? new SocketsHttpHandler { AutomaticDecompression = System.Net.DecompressionMethods.None }, disposeHandler: true)
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        };
+        _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", NeteaseClient.DefaultUserAgent);
+    }
+
+    public static bool ShouldStartCaching(TimeSpan position, TimeSpan duration) =>
+        position >= MinimumPlayedBeforeCaching || (duration > TimeSpan.Zero && position >= duration / 2);
+
+    public string Directory => _directory;
+
+    /// <summary>Raised after the contents changed (a song added, removed or everything cleared); any thread.</summary>
+    public event Action? Changed;
+
+    public long TotalBytes
+    {
+        get { lock (_gate) { EnsureLoaded(); return _total; } }
+    }
+
+    public int Count
+    {
+        get { lock (_gate) { EnsureLoaded(); return _entries.Count; } }
+    }
+
+    public string PathOf(AudioCacheKey key) => Path.Combine(_directory, key.FileStem + FileExtension);
+
+    public bool Contains(long trackId, AudioQuality quality)
+    {
+        lock (_gate)
+        {
+            EnsureLoaded();
+            return _entries.ContainsKey(new AudioCacheKey(trackId, quality));
+        }
+    }
+
+    public bool IsDownloading(long trackId, AudioQuality quality)
+    {
+        lock (_gate) return _inFlight.Contains(new AudioCacheKey(trackId, quality));
+    }
+
+    /// <summary>
+    /// The cached song, marked as played now; null when there is none. An entry whose file has gone missing
+    /// is dropped on the spot.
+    /// </summary>
+    public AudioCacheEntry? TryGet(long trackId, AudioQuality quality)
+    {
+        var key = new AudioCacheKey(trackId, quality);
+        lock (_gate)
+        {
+            EnsureLoaded();
+            if (!_entries.TryGetValue(key, out var entry)) return null;
+            if (!File.Exists(PathOf(key)))
+            {
+                _entries.Remove(key);
+                _total -= entry.Bytes;
+                SaveLocked();
+                return null;
+            }
+            var touched = entry with { LastPlayedAt = _clock() };
+            _entries[key] = touched;
+            SaveLocked();
+            return touched;
+        }
+    }
+
+    /// <summary>
+    /// Downloads <paramref name="media"/> into the cache. Returns null when the song is already cached or
+    /// being downloaded; throws when the download fails, leaving no file behind.
+    /// </summary>
+    public async Task<AudioCacheEntry?> DownloadAsync(ResolvedMedia media, CancellationToken cancellationToken = default)
+    {
+        var key = new AudioCacheKey(media.TrackId, media.RequestedQuality);
+        lock (_gate)
+        {
+            EnsureLoaded();
+            if (_entries.ContainsKey(key) || !_inFlight.Add(key)) return null;
+        }
+        var final = PathOf(key);
+        var part = final + PartExtension;
+        try
+        {
+            System.IO.Directory.CreateDirectory(_directory);
+            using var response = await _http.GetAsync(media.Url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            var expected = response.Content.Headers.ContentLength;
+            var head = new byte[16];
+            var headLength = 0;
+            long written = 0;
+            await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+            await using (var file = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.Asynchronous))
+            using (var idle = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                var buffer = new byte[1 << 16];
+                while (true)
+                {
+                    idle.CancelAfter(IdleTimeout);
+                    int read;
+                    try
+                    {
+                        read = await source.ReadAsync(buffer, idle.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        throw new IOException($"下载停滞超过 {IdleTimeout.TotalSeconds:0} 秒");
+                    }
+                    if (read == 0) break;
+                    if (headLength < head.Length)
+                    {
+                        var take = Math.Min(head.Length - headLength, read);
+                        buffer.AsSpan(0, take).CopyTo(head.AsSpan(headLength));
+                        headLength += take;
+                    }
+                    await file.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                    written += read;
+                }
+            }
+            if (written == 0) throw new IOException("下载内容为空");
+            if (expected is { } length && written != length) throw new IOException($"下载不完整：{written} / {length} 字节");
+            var contentType = AudioFormat.Sniff(head.AsSpan(0, headLength))
+                              ?? AudioFormat.FromContentType(response.Content.Headers.ContentType?.MediaType)
+                              ?? AudioFormat.FromServedQuality(media.Quality)
+                              ?? AudioFormat.Mpeg;
+            File.Move(part, final, overwrite: true);
+            var now = _clock();
+            var entry = new AudioCacheEntry(media.TrackId, media.RequestedQuality, media.SourceName, media.Quality, contentType, written, now, now);
+            lock (_gate)
+            {
+                if (_entries.TryGetValue(key, out var previous)) _total -= previous.Bytes;
+                _entries[key] = entry;
+                _total += written;
+                TrimLocked(keep: key);
+                SaveLocked();
+            }
+            Changed?.Invoke();
+            return entry;
+        }
+        catch
+        {
+            TryDelete(part);
+            throw;
+        }
+        finally
+        {
+            lock (_gate) _inFlight.Remove(key);
+        }
+    }
+
+    public void Remove(long trackId, AudioQuality quality)
+    {
+        var key = new AudioCacheKey(trackId, quality);
+        lock (_gate)
+        {
+            EnsureLoaded();
+            if (!_entries.Remove(key, out var entry)) return;
+            _total -= entry.Bytes;
+            TryDelete(PathOf(key));
+            SaveLocked();
+        }
+        Changed?.Invoke();
+    }
+
+    /// <summary>Deletes every cached song. A file that cannot be deleted right now keeps its entry.</summary>
+    public void Clear()
+    {
+        lock (_gate)
+        {
+            EnsureLoaded();
+            foreach (var (key, entry) in _entries.ToList())
+            {
+                if (!TryDelete(PathOf(key))) continue;
+                _entries.Remove(key);
+                _total -= entry.Bytes;
+            }
+            SaveLocked();
+        }
+        Changed?.Invoke();
+    }
+
+    /// <summary>Applies the current limit, e.g. after it was lowered in Settings.</summary>
+    public void Trim()
+    {
+        bool changed;
+        lock (_gate)
+        {
+            EnsureLoaded();
+            changed = TrimLocked(keep: null);
+            if (changed) SaveLocked();
+        }
+        if (changed) Changed?.Invoke();
+    }
+
+    public void Dispose() => _http.Dispose();
+
+    // MARK: Internals (callers hold the lock)
+
+    private void EnsureLoaded()
+    {
+        if (_loaded) return;
+        _loaded = true;
+        _entries.Clear();
+        _total = 0;
+        if (!System.IO.Directory.Exists(_directory)) return;
+        foreach (var stray in System.IO.Directory.EnumerateFiles(_directory, "*" + PartExtension)) TryDelete(stray);
+        var indexPath = Path.Combine(_directory, IndexName);
+        if (!File.Exists(indexPath)) return;
+        Index? index = null;
+        try
+        {
+            index = JsonSerializer.Deserialize<Index>(File.ReadAllText(indexPath), JsonOptions);
+        }
+        catch (Exception error) when (error is JsonException or IOException)
+        {
+        }
+        foreach (var entry in index?.Entries ?? [])
+        {
+            var info = new FileInfo(PathOf(entry.Key));
+            if (!info.Exists || info.Length != entry.Bytes) continue;
+            _entries[entry.Key] = entry;
+            _total += entry.Bytes;
+        }
+    }
+
+    /// <summary>Evicts least recently played songs until the limit holds; <paramref name="keep"/> and the newest survive.</summary>
+    private bool TrimLocked(AudioCacheKey? keep)
+    {
+        var limit = Math.Max(0, _limitBytes());
+        var changed = false;
+        var stuck = new HashSet<AudioCacheKey>();
+        while (_total > limit)
+        {
+            var newest = _entries.Count == 0 ? default : _entries.Values.MaxBy(e => e.LastPlayedAt)!.Key;
+            var victim = _entries.Values
+                .Where(e => e.Key != keep && e.Key != newest && !stuck.Contains(e.Key))
+                .MinBy(e => e.LastPlayedAt);
+            if (victim is null) break;
+            if (!TryDelete(PathOf(victim.Key)))
+            {
+                stuck.Add(victim.Key);
+                continue;
+            }
+            _entries.Remove(victim.Key);
+            _total -= victim.Bytes;
+            changed = true;
+        }
+        return changed;
+    }
+
+    private void SaveLocked()
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(_directory);
+            var path = Path.Combine(_directory, IndexName);
+            var temp = path + ".tmp";
+            File.WriteAllText(temp, JsonSerializer.Serialize(new Index(_entries.Values.OrderBy(e => e.LastPlayedAt).ToList()), JsonOptions));
+            File.Move(temp, path, overwrite: true);
+        }
+        catch (IOException)
+        {
+            // The index is rebuilt from the files on the next load; losing one save is harmless.
+        }
+    }
+
+    private static bool TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+}

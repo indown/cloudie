@@ -18,6 +18,7 @@ public sealed class AppServices
     public required LogService Log { get; init; }
     public required UpdateChecker Updates { get; init; }
     public required StatusService Status { get; init; }
+    public required AudioCache AudioCache { get; init; }
 
     public static AppServices Create()
     {
@@ -34,7 +35,8 @@ public sealed class AppServices
         var unblock = new UnblockService(sources, () => settings.UnblockEnabled ? settings.EnabledSources : new HashSet<string>());
         unblock.SourceFailed += (source, error) => log.Warn($"音源 {source.DisplayName} 失败: {error.Message}");
         var account = new AccountService(api, log);
-        var player = new PlayerService(api, unblock, settings, account, log, new PlaybackStore(AppPaths.QueueFile, AppPaths.PositionFile));
+        var audioCache = new AudioCache(AppPaths.CacheDirectory, () => settings.AudioCacheLimitBytes);
+        var player = new PlayerService(api, unblock, settings, account, log, new PlaybackStore(AppPaths.QueueFile, AppPaths.PositionFile), audioCache);
         return new AppServices
         {
             Settings = settings,
@@ -45,7 +47,8 @@ public sealed class AppServices
             Player = player,
             Log = log,
             Updates = new UpdateChecker(),
-            Status = new StatusService()
+            Status = new StatusService(),
+            AudioCache = audioCache
         };
     }
 }

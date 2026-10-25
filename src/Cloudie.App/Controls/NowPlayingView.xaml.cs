@@ -44,6 +44,7 @@ public sealed partial class NowPlayingView : UserControl, INotifyPropertyChanged
                     break;
                 case nameof(PlayerService.UnblockSource):
                 case nameof(PlayerService.ServedQuality):
+                case nameof(PlayerService.IsCached):
                     Raise(nameof(SourceLabel));
                     break;
             }
@@ -55,7 +56,14 @@ public sealed partial class NowPlayingView : UserControl, INotifyPropertyChanged
     public bool HasLyrics => Player.Lyrics.Lines.Count > 0;
     public string EmptyLyricsText => Player.Lyrics.IsInstrumental ? "纯音乐，请欣赏" : Player.CurrentTrack is null ? string.Empty : "暂无歌词";
     public string LikeGlyph => Player.CurrentTrack is { } track && _account.IsLiked(track.Id) ? "" : "";
-    public string? SourceLabel => Player.UnblockSource is { } source ? $"音源：{source}" : Player.ServedQuality is { } q ? q.ToUpperInvariant() : null;
+    public string? SourceLabel
+    {
+        get
+        {
+            var label = Player.UnblockSource is { } source ? $"音源：{source}" : Player.ServedQuality is { } q ? q.ToUpperInvariant() : null;
+            return Player.IsCached ? (label is null ? "已缓存" : $"{label} · 已缓存") : label;
+        }
+    }
 
     private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 

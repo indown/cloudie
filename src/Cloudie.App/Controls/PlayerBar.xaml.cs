@@ -30,7 +30,8 @@ public sealed partial class PlayerBar : UserControl, INotifyPropertyChanged
                 case nameof(PlayerService.Duration): Raise(nameof(DurationSeconds)); break;
                 case nameof(PlayerService.RepeatMode): Raise(nameof(RepeatGlyph)); Raise(nameof(IsRepeatOn)); Raise(nameof(RepeatLabel)); break;
                 case nameof(PlayerService.UnblockSource):
-                case nameof(PlayerService.ServedQuality): Raise(nameof(SourceLabel)); break;
+                case nameof(PlayerService.ServedQuality):
+                case nameof(PlayerService.IsCached): Raise(nameof(SourceLabel)); break;
                 case nameof(PlayerService.IsFm):
                 case nameof(PlayerService.IsHeartMode): Raise(nameof(ModeLabel)); break;
             }
@@ -44,7 +45,14 @@ public sealed partial class PlayerBar : UserControl, INotifyPropertyChanged
     public string RepeatGlyph => Player.RepeatMode == RepeatMode.One ? "" : "";
     public bool IsRepeatOn => Player.RepeatMode != RepeatMode.Off;
     public string RepeatLabel => Player.RepeatMode switch { RepeatMode.One => "单曲循环", RepeatMode.All => "列表循环", _ => "循环模式" };
-    public string? SourceLabel => Player.UnblockSource is { } source ? $"来自 {source}" : Player.ServedQuality is { } q ? q.ToUpperInvariant() : null;
+    public string? SourceLabel
+    {
+        get
+        {
+            var label = Player.UnblockSource is { } source ? $"来自 {source}" : Player.ServedQuality is { } q ? q.ToUpperInvariant() : null;
+            return Player.IsCached ? (label is null ? "已缓存" : $"{label} · 已缓存") : label;
+        }
+    }
     public string? ModeLabel => Player.IsFm ? "私人 FM" : Player.IsHeartMode ? "心动模式" : null;
 
     public double VolumePercent

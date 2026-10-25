@@ -8,7 +8,11 @@ public sealed partial class SettingsPage : Page
 {
     public SettingsViewModel ViewModel { get; } = new();
 
-    public SettingsPage() => InitializeComponent();
+    public SettingsPage()
+    {
+        InitializeComponent();
+        Unloaded += (_, _) => ViewModel.Detach();
+    }
 
     private async void Login_Click(object sender, RoutedEventArgs e)
     {

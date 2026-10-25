@@ -30,6 +30,11 @@ public static class SettingsStoreExtensions
 
     public static void SetInt(this ISettingsStore store, string key, int value) => store.SetString(key, value.ToString());
 
+    public static long GetLong(this ISettingsStore store, string key, long fallback) =>
+        long.TryParse(store.GetString(key), out var value) ? value : fallback;
+
+    public static void SetLong(this ISettingsStore store, string key, long value) => store.SetString(key, value.ToString());
+
     public static double GetDouble(this ISettingsStore store, string key, double fallback) =>
         double.TryParse(store.GetString(key), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : fallback;
 
