@@ -51,7 +51,7 @@ public sealed partial class FmPage : Page, INotifyPropertyChanged
         if (Player.CurrentTrack is not { } track || !_account.IsLoggedIn) return;
         try
         {
-            await _account.ToggleLikeAsync(track.Id);
+            await _account.ToggleLikeAsync(track);
         }
         catch (Exception error)
         {

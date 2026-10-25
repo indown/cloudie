@@ -128,7 +128,7 @@ public sealed partial class NowPlayingView : UserControl, INotifyPropertyChanged
     {
         if (Player.CurrentTrack is { } track && _account.IsLoggedIn)
         {
-            try { await _account.ToggleLikeAsync(track.Id); }
+            try { await _account.ToggleLikeAsync(track); }
             catch (Exception error) { App.Services.Log.Warn($"like: {error.Message}"); }
         }
     }

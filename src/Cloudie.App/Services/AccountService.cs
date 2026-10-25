@@ -1,11 +1,16 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Cloudie.Core.Library;
 using Cloudie.Core.Netease;
 using Cloudie.Core.Netease.Models;
 
 namespace Cloudie.App.Services;
 
-/// <summary>The signed-in NetEase account, its playlists and liked songs.</summary>
-public sealed partial class AccountService(NeteaseApi api, LogService log) : ObservableObject
+/// <summary>
+/// The signed-in NetEase account, its playlists and liked songs. Edits made here (a like, a song added or
+/// removed, a rename) are mirrored into the cached copies of the playlists, so their pages open right away
+/// without waiting for a refresh.
+/// </summary>
+public sealed partial class AccountService(NeteaseApi api, LogService log, TrackListCache lists) : ObservableObject
 {
     [ObservableProperty] public partial UserProfile? Profile { get; private set; }
     [ObservableProperty] public partial IReadOnlyList<PlaylistSummary> Playlists { get; private set; } = [];
@@ -84,18 +89,22 @@ public sealed partial class AccountService(NeteaseApi api, LogService log) : Obs
     /// Likes or unlikes a song. The liked set, and every heart bound to it, changes at once; a failed request
     /// puts it back and throws, so the caller can say so.
     /// </summary>
-    public async Task ToggleLikeAsync(long trackId)
+    public async Task ToggleLikeAsync(Track track)
     {
-        var like = !_likedIds.Contains(trackId);
-        SetLiked(trackId, like);
+        var like = !_likedIds.Contains(track.Id);
+        SetLiked(track.Id, like);
         try
         {
-            await api.LikeTrackAsync(trackId, like);
+            await api.LikeTrackAsync(track.Id, like);
         }
         catch
         {
-            SetLiked(trackId, !like);
+            SetLiked(track.Id, !like);
             throw;
+        }
+        if (Favorites is { } favorites)
+        {
+            lists.Update(CachedTrackList.PlaylistKey(favorites.Id), list => like ? list.WithTrackOnTop(track) : list.WithoutTrack(track.Id));
         }
     }
 
@@ -128,11 +137,17 @@ public sealed partial class AccountService(NeteaseApi api, LogService log) : Obs
     }
 
     /// <summary>Throws a <see cref="NeteaseApiException"/> with code 502 when the song is already in the playlist.</summary>
-    public Task AddToPlaylistAsync(long playlistId, long trackId) =>
-        api.ManipulatePlaylistTracksAsync(playlistId, [trackId], add: true);
+    public async Task AddToPlaylistAsync(long playlistId, Track track)
+    {
+        await api.ManipulatePlaylistTracksAsync(playlistId, [track.Id], add: true);
+        lists.Update(CachedTrackList.PlaylistKey(playlistId), list => list.WithTrackOnTop(track));
+    }
 
-    public Task RemoveFromPlaylistAsync(long playlistId, long trackId) =>
-        api.ManipulatePlaylistTracksAsync(playlistId, [trackId], add: false);
+    public async Task RemoveFromPlaylistAsync(long playlistId, long trackId)
+    {
+        await api.ManipulatePlaylistTracksAsync(playlistId, [trackId], add: false);
+        lists.Update(CachedTrackList.PlaylistKey(playlistId), list => list.WithoutTrack(trackId));
+    }
 
     public async Task<PlaylistSummary?> CreatePlaylistAsync(string name, bool isPrivate = false)
     {
@@ -144,12 +159,14 @@ public sealed partial class AccountService(NeteaseApi api, LogService log) : Obs
     public async Task RenamePlaylistAsync(long playlistId, string name)
     {
         await api.RenamePlaylistAsync(playlistId, name);
+        lists.Update(CachedTrackList.PlaylistKey(playlistId), list => list with { Title = name });
         await ReloadPlaylistsAsync();
     }
 
     public async Task DeletePlaylistAsync(long playlistId)
     {
         await api.DeletePlaylistAsync(playlistId);
+        lists.Remove(CachedTrackList.PlaylistKey(playlistId));
         await ReloadPlaylistsAsync();
     }
 

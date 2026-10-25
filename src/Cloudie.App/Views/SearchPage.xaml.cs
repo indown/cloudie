@@ -59,7 +59,7 @@ public sealed partial class SearchPage : Page, INotifyPropertyChanged
     {
         try
         {
-            await App.Services.Account.ToggleLikeAsync(row.Track.Id);
+            await App.Services.Account.ToggleLikeAsync(row.Track);
         }
         catch (Exception error)
         {

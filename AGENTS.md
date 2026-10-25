@@ -56,6 +56,12 @@ Notes for anyone (human or agent) continuing this code base.
   file, not an error, so the VIP account cannot be a fallback), asks the main account first for 云盘 songs, and
   retires it on 301 until the user scans again. `AccountService.PlaybackVipType` is the higher tier of the two,
   so VIP-only songs are not marked unplayable in lists.
+- List pages (playlist, album, artist, 每日推荐) are cached as shown (`TrackListCache`, Core; one JSON file per list under
+  `%LOCALAPPDATA%\Cloudie\lists`, the last few in memory). `TrackListViewModel` draws the cached copy at once and fetches
+  behind it: one of the account's own or subscribed playlists is first checked against the small `/user/playlist` reply
+  (`trackUpdateTime` + `trackCount`) and the heavy detail is skipped when they match; rows are rebuilt only when the song
+  sequence differs. `AccountService` mirrors likes, adds, removals and renames into the cached playlists, so 我喜欢的音乐
+  is right before its refresh. With a cached copy on screen a failed refresh is only logged.
 - Settings, cookies and the log live in `%LOCALAPPDATA%\Cloudie` (`AppPaths`), not in ApplicationData, so the app
   runs unpackaged; `.github/workflows/build.yml` publishes unpackaged self-contained zips for x64 and ARM64 on every
   push and is the quickest way to compile the WinUI project without a Windows machine.

@@ -30,6 +30,8 @@ public sealed class PlaylistSummary
     [JsonPropertyName("playCount")] public long? PlayCount { get; init; }
     [JsonPropertyName("trackCount")] public int TrackCount { get; init; }
     [JsonPropertyName("updateTime")] public long? UpdateTime { get; init; }
+    /// <summary>When the songs last changed; with <see cref="TrackCount"/>, the cheap test of whether a cached detail is current.</summary>
+    [JsonPropertyName("trackUpdateTime")] public long TrackUpdateTime { get; init; }
     [JsonPropertyName("copywriter")] public string? Copywriter { get; init; }
     [JsonPropertyName("creator")] public PlaylistCreator? Creator { get; init; }
     [JsonPropertyName("specialType")] public int SpecialType { get; init; }
@@ -62,6 +64,7 @@ public sealed class PlaylistDetail
     [JsonPropertyName("tracks")] public List<Track> Tracks { get; set; } = [];
     [JsonPropertyName("specialType")] public int SpecialType { get; init; }
     [JsonPropertyName("updateTime")] public long UpdateTime { get; init; }
+    [JsonPropertyName("trackUpdateTime")] public long TrackUpdateTime { get; init; }
 }
 
 public sealed class AlbumSummary

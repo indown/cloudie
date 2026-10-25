@@ -18,6 +18,8 @@ public static class AppPaths
     public static string PositionFile => Path.Combine(DataDirectory, "playback.json");
     /// <summary>歌曲缓存: downloaded songs (<c>*.cache</c>) and their <c>index.json</c>.</summary>
     public static string CacheDirectory => Path.Combine(DataDirectory, "cache");
+    /// <summary>List pages as last shown (one JSON file per playlist, album, artist or day), so they open before the network answers.</summary>
+    public static string ListsDirectory => Path.Combine(DataDirectory, "lists");
 
     public static void Ensure() => Directory.CreateDirectory(DataDirectory);
 }

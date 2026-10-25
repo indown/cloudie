@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Cloudie.App.Services;
+using Cloudie.Core.Library;
 using Cloudie.Core.Netease;
 using Cloudie.Core.Netease.Models;
 
@@ -54,6 +55,7 @@ public sealed partial class TrackListViewModel : ObservableObject
     private readonly AccountService _account = App.Services.Account;
     private readonly PlayerService _player = App.Services.Player;
     private readonly LogService _log = App.Services.Log;
+    private readonly TrackListCache _lists = App.Services.Lists;
     private readonly List<Track> _tracks = [];
     private long _sourceId;
     private TrackListRequest? _request;
@@ -96,67 +98,135 @@ public sealed partial class TrackListViewModel : ObservableObject
     public async Task LoadAsync(TrackListRequest request)
     {
         _request = request;
-        IsLoading = true;
         Error = null;
-        Title = request.Title ?? string.Empty;
         _sourceId = request.Kind == TrackListKind.DailySongs ? 0 : request.Id;
-        Albums.Clear();
-        HasAlbums = false;
+        _playlistId = request.Kind == TrackListKind.Playlist ? request.Id : 0;
+        // What the page showed last time goes up at once; the network answers behind it and replaces it only if changed.
+        var key = KeyOf(request);
+        var cached = _lists.TryGet(key);
+        if (cached is not null)
+        {
+            Apply(cached);
+        }
+        else
+        {
+            Reset(request);
+            IsLoading = true;
+        }
+        try
+        {
+            var fresh = await FetchAsync(request, key, cached);
+            if (_request != request) return;
+            if (fresh is not null)
+            {
+                Apply(fresh);
+                _lists.Save(fresh);
+            }
+        }
+        catch (Exception error)
+        {
+            if (_request != request) return;
+            if (cached is null)
+            {
+                _log.Error($"track list {request}: {error}");
+                Error = ErrorText.Describe(error);
+            }
+            else
+            {
+                // The cached list stays up; a failed refresh is not worth an error bar.
+                _log.Warn($"track list {request}: refresh failed, cached copy kept: {error.Message}");
+            }
+        }
+        finally
+        {
+            if (_request == request) IsLoading = false;
+        }
+    }
+
+    private static string KeyOf(TrackListRequest request) => request.Kind switch
+    {
+        TrackListKind.Playlist => CachedTrackList.PlaylistKey(request.Id),
+        TrackListKind.Album => CachedTrackList.AlbumKey(request.Id),
+        TrackListKind.Artist => CachedTrackList.ArtistKey(request.Id),
+        _ => CachedTrackList.DailyKey(DateOnly.FromDateTime(DateTime.Now))
+    };
+
+    /// <summary>The empty page while a first fetch runs: the name from the request, nothing else.</summary>
+    private void Reset(TrackListRequest request)
+    {
+        Title = request.Title ?? string.Empty;
         Subtitle = null;
         Description = null;
         CoverUrl = null;
-        _playlistId = request.Kind == TrackListKind.Playlist ? request.Id : 0;
+        Albums.Clear();
+        HasAlbums = false;
         IsOwnPlaylist = false;
         CanSubscribe = false;
         IsSubscribed = false;
         CanHeartMode = false;
         CanEditPlaylist = false;
-        try
+        _tracks.Clear();
+        Rows.Clear();
+        Summary = string.Empty;
+    }
+
+    /// <summary>Puts a list, cached or fresh, on the page. The rows are rebuilt only when the songs differ.</summary>
+    private void Apply(CachedTrackList list)
+    {
+        Title = list.Title;
+        Subtitle = list.Subtitle;
+        Description = list.Description;
+        CoverUrl = list.CoverUrl;
+        Albums.Clear();
+        foreach (var album in list.Albums ?? []) Albums.Add(album);
+        HasAlbums = Albums.Count > 0;
+        if (_playlistId != 0)
         {
-            switch (request.Kind)
-            {
-                case TrackListKind.Playlist:
-                    await LoadPlaylistAsync(request.Id);
-                    break;
-                case TrackListKind.Album:
-                    await LoadAlbumAsync(request.Id);
-                    break;
-                case TrackListKind.Artist:
-                    await LoadArtistAsync(request.Id);
-                    break;
-                case TrackListKind.DailySongs:
-                    var daily = await _api.GetDailyRecommendSongsAsync();
-                    SetTracks(daily, null);
-                    Title = "每日推荐";
-                    Subtitle = DateTime.Now.ToString("M月d日");
-                    CoverUrl = daily.FirstOrDefault()?.Album.PicUrl;
-                    break;
-            }
+            IsOwnPlaylist = _account.IsOwn(_playlistId);
+            CanSubscribe = _account.IsLoggedIn && !IsOwnPlaylist;
+            IsSubscribed = list.Subscribed || _account.IsSubscribed(_playlistId);
+            CanHeartMode = IsOwnPlaylist && list.SpecialType == 5;
+            CanEditPlaylist = IsOwnPlaylist && list.SpecialType != 5;
         }
-        catch (Exception error)
+        if (Rows.Count == 0 || !list.HasSameTracksAs(_tracks)) SetTracks(list.Tracks, list.Privileges, list.CountLabel);
+    }
+
+    /// <summary>
+    /// The fresh list for the page, or null when <paramref name="cached"/> is known to be current. One of the
+    /// account's own or subscribed playlists is checked first against the small <c>/user/playlist</c> reply
+    /// (trackUpdateTime and trackCount); the heavy detail is fetched only when they moved, and always for lists
+    /// that are not the account's.
+    /// </summary>
+    private async Task<CachedTrackList?> FetchAsync(TrackListRequest request, string key, CachedTrackList? cached)
+    {
+        switch (request.Kind)
         {
-            _log.Error($"track list {request}: {error}");
-            Error = ErrorText.Describe(error);
-        }
-        finally
-        {
-            IsLoading = false;
+            case TrackListKind.Playlist:
+                if (cached is { TrackUpdateTime: > 0 } && _account.Profile is { } me && _account.Playlists.Any(p => p.Id == request.Id))
+                {
+                    var summary = (await _api.GetUserPlaylistsAsync(me.UserId)).FirstOrDefault(p => p.Id == request.Id);
+                    if (summary is not null && summary.TrackUpdateTime == cached.TrackUpdateTime && summary.TrackCount == cached.TrackCount)
+                    {
+                        _log.Info($"playlist {request.Id}: cached copy is current");
+                        return null;
+                    }
+                }
+                return await FetchPlaylistAsync(request.Id);
+            case TrackListKind.Album:
+                return await FetchAlbumAsync(request.Id);
+            case TrackListKind.Artist:
+                return await FetchArtistAsync(request.Id);
+            default:
+                var daily = await _api.GetDailyRecommendSongsAsync();
+                return new CachedTrackList(key, "每日推荐", DateTime.Now.ToString("M月d日"), null,
+                    daily.FirstOrDefault()?.Album.PicUrl, daily, null, DateTimeOffset.UtcNow);
         }
     }
 
-    private async Task LoadPlaylistAsync(long id)
+    private async Task<CachedTrackList> FetchPlaylistAsync(long id)
     {
         var detail = await _api.GetPlaylistDetailAsync(id);
         var playlist = detail.Playlist;
-        Title = playlist.Name;
-        Subtitle = playlist.Creator is { } creator ? $"{creator.Nickname} · {playlist.TrackCount} 首" : $"{playlist.TrackCount} 首";
-        Description = playlist.Description;
-        CoverUrl = playlist.CoverImgUrl;
-        IsOwnPlaylist = _account.IsOwn(id);
-        CanSubscribe = _account.IsLoggedIn && !IsOwnPlaylist;
-        IsSubscribed = playlist.Subscribed || _account.IsSubscribed(id);
-        CanHeartMode = IsOwnPlaylist && playlist.SpecialType == 5;
-        CanEditPlaylist = IsOwnPlaylist && playlist.SpecialType != 5;
         var tracks = playlist.Tracks;
         var privileges = detail.Privileges;
         // v6 returns the first thousand tracks inline; the rest come from song/detail in pages.
@@ -174,37 +244,37 @@ public sealed partial class TrackListViewModel : ObservableObject
             tracks = [.. tracks, .. fetched];
             privileges = [.. privileges ?? [], .. fetchedPrivileges];
         }
-        SetTracks(tracks, privileges);
+        return new CachedTrackList(CachedTrackList.PlaylistKey(id), playlist.Name,
+            playlist.Creator is { } creator ? $"{creator.Nickname} · {playlist.TrackCount} 首" : $"{playlist.TrackCount} 首",
+            playlist.Description, playlist.CoverImgUrl, tracks, privileges, DateTimeOffset.UtcNow,
+            TrackUpdateTime: playlist.TrackUpdateTime, TrackCount: playlist.TrackCount, SpecialType: playlist.SpecialType, Subscribed: playlist.Subscribed);
     }
 
-    private async Task LoadAlbumAsync(long id)
+    private async Task<CachedTrackList> FetchAlbumAsync(long id)
     {
         var response = await _api.GetAlbumAsync(id);
-        Title = response.Album?.Name ?? Title;
-        Subtitle = response.Album is { } album ? $"{album.ArtistName} · {album.PublishDate?.Year.ToString() ?? ""}" : null;
-        Description = response.Album?.Description;
-        CoverUrl = response.Album?.PicUrl;
-        SetTracks(response.Songs, null);
+        var album = response.Album;
+        return new CachedTrackList(CachedTrackList.AlbumKey(id), album?.Name ?? Title,
+            album is not null ? $"{album.ArtistName} · {album.PublishDate?.Year.ToString() ?? ""}" : null,
+            album?.Description, album?.PicUrl, response.Songs, null, DateTimeOffset.UtcNow);
     }
 
-    private async Task LoadArtistAsync(long id)
+    private async Task<CachedTrackList> FetchArtistAsync(long id)
     {
         var response = await _api.GetArtistAsync(id);
-        Title = response.Artist?.Name ?? Title;
-        Subtitle = response.Artist is { } artist ? $"{artist.MusicSize} 首歌曲 · {artist.AlbumSize} 张专辑" : null;
-        Description = response.Artist?.BriefDesc;
-        CoverUrl = response.Artist?.ImageUrl;
-        SetTracks(response.HotSongs, null, countLabel: "热门");
+        var artist = response.Artist;
+        IReadOnlyList<AlbumSummary>? albums = null;
         try
         {
-            var albums = await _api.GetArtistAlbumsAsync(id, limit: 30);
-            foreach (var album in albums.HotAlbums) Albums.Add(album);
+            albums = (await _api.GetArtistAlbumsAsync(id, limit: 30)).HotAlbums;
         }
         catch (Exception error)
         {
             _log.Warn($"artist albums {id}: {error.Message}");
         }
-        HasAlbums = Albums.Count > 0;
+        return new CachedTrackList(CachedTrackList.ArtistKey(id), artist?.Name ?? Title,
+            artist is not null ? $"{artist.MusicSize} 首歌曲 · {artist.AlbumSize} 张专辑" : null,
+            artist?.BriefDesc, artist?.ImageUrl, response.HotSongs, null, DateTimeOffset.UtcNow, Albums: albums, CountLabel: "热门");
     }
 
     /// <param name="countLabel">Names what the rows are when the header already counts something else, e.g. 热门 under an artist's full song count.</param>
@@ -268,6 +338,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         {
             await _account.SubscribePlaylistAsync(_playlistId, !IsSubscribed);
             IsSubscribed = !IsSubscribed;
+            _lists.Update(CachedTrackList.PlaylistKey(_playlistId), list => list with { Subscribed = IsSubscribed });
             App.Services.Status.Show(IsSubscribed ? "已收藏到我的歌单" : "已取消收藏");
         }
         catch (Exception error)
@@ -301,7 +372,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         if (row is null || !_account.IsLoggedIn) return;
         try
         {
-            await _account.ToggleLikeAsync(row.Track.Id);
+            await _account.ToggleLikeAsync(row.Track);
         }
         catch (Exception error)
         {

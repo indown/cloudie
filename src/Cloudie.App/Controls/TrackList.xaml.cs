@@ -321,7 +321,7 @@ public sealed partial class TrackList : UserControl
     {
         try
         {
-            await App.Services.Account.AddToPlaylistAsync(playlist.Id, row.Track.Id);
+            await App.Services.Account.AddToPlaylistAsync(playlist.Id, row.Track);
             App.Services.Status.Show($"已添加到《{playlist.Name}》");
         }
         catch (NeteaseApiException error) when (error.Code == 502)
