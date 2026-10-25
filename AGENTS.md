@@ -61,7 +61,11 @@ Notes for anyone (human or agent) continuing this code base.
   behind it: one of the account's own or subscribed playlists is first checked against the small `/user/playlist` reply
   (`trackUpdateTime` + `trackCount`) and the heavy detail is skipped when they match; rows are rebuilt only when the song
   sequence differs. `AccountService` mirrors likes, adds, removals and renames into the cached playlists, so 我喜欢的音乐
-  is right before its refresh. With a cached copy on screen a failed refresh is only logged.
+  is right before its refresh. With a cached copy on screen a failed refresh is only logged. The home page keeps one
+  snapshot (`HomeSnapshotStore`, `home.json`) keyed by account and *recommendation day*: NetEase renews 每日推荐 and
+  推荐歌单 at 06:00 Beijing time (`HomeSnapshot.RecommendationDay`), so the same account on the same day paints the
+  snapshot and fetches nothing; the 每日推荐 list page is keyed by that day too. Unlike a playlist, which the listener
+  changes at any moment, these need no freshness check within the day.
 - Settings, cookies and the log live in `%LOCALAPPDATA%\Cloudie` (`AppPaths`), not in ApplicationData, so the app
   runs unpackaged; `.github/workflows/build.yml` publishes unpackaged self-contained zips for x64 and ARM64 on every
   push and is the quickest way to compile the WinUI project without a Windows machine.

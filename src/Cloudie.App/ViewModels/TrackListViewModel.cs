@@ -148,7 +148,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         TrackListKind.Playlist => CachedTrackList.PlaylistKey(request.Id),
         TrackListKind.Album => CachedTrackList.AlbumKey(request.Id),
         TrackListKind.Artist => CachedTrackList.ArtistKey(request.Id),
-        _ => CachedTrackList.DailyKey(DateOnly.FromDateTime(DateTime.Now))
+        _ => CachedTrackList.DailyKey(HomeSnapshot.RecommendationDay(DateTimeOffset.Now))
     };
 
     /// <summary>The empty page while a first fetch runs: the name from the request, nothing else.</summary>
@@ -217,6 +217,12 @@ public sealed partial class TrackListViewModel : ObservableObject
             case TrackListKind.Artist:
                 return await FetchArtistAsync(request.Id);
             default:
+                if (cached is not null)
+                {
+                    // Keyed by the recommendation day: NetEase does not change the daily picks before the next 06:00 in Beijing.
+                    _log.Info("daily songs: cached copy is current");
+                    return null;
+                }
                 var daily = await _api.GetDailyRecommendSongsAsync();
                 return new CachedTrackList(key, "每日推荐", DateTime.Now.ToString("M月d日"), null,
                     daily.FirstOrDefault()?.Album.PicUrl, daily, null, DateTimeOffset.UtcNow);

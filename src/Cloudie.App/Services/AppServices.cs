@@ -24,6 +24,8 @@ public sealed class AppServices
     public required AudioCache AudioCache { get; init; }
     /// <summary>List pages as last shown; the account service keeps the user's own playlists in it up to date.</summary>
     public required TrackListCache Lists { get; init; }
+    /// <summary>The home page as last shown; current until the next 06:00 in Beijing for the same account.</summary>
+    public required HomeSnapshotStore Home { get; init; }
     /// <summary>Set when the configured cache folder was unusable at start-up and the default is in use for this session.</summary>
     public string? AudioCacheNotice { get; init; }
 
@@ -76,6 +78,7 @@ public sealed class AppServices
             Status = new StatusService(),
             AudioCache = audioCache,
             Lists = lists,
+            Home = new HomeSnapshotStore(AppPaths.HomeFile),
             AudioCacheNotice = cacheNotice
         };
     }

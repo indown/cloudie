@@ -20,6 +20,8 @@ public static class AppPaths
     public static string CacheDirectory => Path.Combine(DataDirectory, "cache");
     /// <summary>List pages as last shown (one JSON file per playlist, album, artist or day), so they open before the network answers.</summary>
     public static string ListsDirectory => Path.Combine(DataDirectory, "lists");
+    /// <summary>The home page as last shown (每日推荐歌单, charts, the first daily songs), painted before the network answers.</summary>
+    public static string HomeFile => Path.Combine(DataDirectory, "home.json");
 
     public static void Ensure() => Directory.CreateDirectory(DataDirectory);
 }
