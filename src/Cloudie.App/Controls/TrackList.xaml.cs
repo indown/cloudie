@@ -81,6 +81,8 @@ public sealed partial class TrackList : UserControl
     public event Action<TrackRow>? HeartModeRequested;
     /// <summary>Raised from the context menu to open the row's artist or album page.</summary>
     public event Action<TrackListRequest>? NavigateRequested;
+    /// <summary>The list scrolled (the value is the vertical offset); also raised once when the list is ready.</summary>
+    public event Action<double>? Scrolled;
 
     private ScrollViewer? _scroller;
     private bool _locateShown;
@@ -98,13 +100,15 @@ public sealed partial class TrackList : UserControl
         List.Loaded += (_, _) =>
         {
             _scroller ??= List.FindDescendant<ScrollViewer>();
-            if (_scroller is not null)
+            if (_scroller is { } scroller)
             {
-                _scroller.ViewChanged += (_, e) =>
+                scroller.ViewChanged += (_, e) =>
                 {
                     if (!e.IsIntermediate) _wheelTarget = null;
                     UpdateLocate();
+                    Scrolled?.Invoke(scroller.VerticalOffset);
                 };
+                Scrolled?.Invoke(scroller.VerticalOffset);
             }
             UpdateLocate();
         };

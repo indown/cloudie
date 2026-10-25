@@ -10,6 +10,7 @@
 #   -Action select -Type ComboBox -Index 1 -Value "深色"   open the nth control of that type and pick an item
 #   -Action resize -X 1200 -Y 750        resize the window to physical pixels (position unchanged)
 #   -Action scroll -X 100 -Y 200 -Value -5   mouse-wheel at a window-relative point (negative = down, in notches)
+#   -Action sscroll -X 100 -Y 200 -Value -5  the same with Shift held (sideways scrolling of a strip)
 #   -Action tree [-Depth 6]              print the automation tree (control type, name, class)
 param(
     [string]$Process = "Cloudie",
@@ -33,6 +34,7 @@ public static class Native {
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, UIntPtr extra);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT rect, int size);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
     [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hWnd, int x, int y, int w, int h, bool repaint);
@@ -103,13 +105,16 @@ switch ($Action) {
         Click-Point ($rect.Left + $X) ($rect.Top + $Y)
         Write-Output "clicked $X,$Y"
     }
-    "scroll" {
+    { $_ -in "scroll", "sscroll" } {
         $rect = Window-Rect
         [void][Native]::SetCursorPos($rect.Left + $X, $rect.Top + $Y)
         Start-Sleep -Milliseconds 60
         $delta = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]([int]$Value * 120)), 0)   # negative notches as DWORD
+        $shift = $Action -eq "sscroll"
+        if ($shift) { [Native]::keybd_event(0x10, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 30 }   # VK_SHIFT down
         [Native]::mouse_event(0x0800, 0, 0, $delta, [UIntPtr]::Zero)
-        Write-Output "scrolled $Value at $X,$Y"
+        if ($shift) { Start-Sleep -Milliseconds 30; [Native]::keybd_event(0x10, 0, 2, [UIntPtr]::Zero) }   # KEYEVENTF_KEYUP
+        Write-Output "$(if ($shift) { 'shift-' })scrolled $Value at $X,$Y"
     }
     "hover" {
         $rect = Window-Rect

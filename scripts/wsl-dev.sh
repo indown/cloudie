@@ -7,7 +7,8 @@
 #   scripts/wsl-dev.sh stop                    stop Cloudie.exe
 #   scripts/wsl-dev.sh shot [name] [delayMs] [x,y,w,h]   capture the Cloudie window to /tmp/cloudie-shots/<name>.png (crop = 2x zoom)
 #   scripts/wsl-dev.sh ui <args...>            drive the window: ui invoke "每日推荐" | ui click 100 200 | ui rclick 100 200 |
-#                                              ui keys "^l" | ui type "text" | ui select ComboBox 1 "深色" | ui resize 1200 750 | ui tree
+#                                              ui keys "^l" | ui type "text" | ui select ComboBox 1 "深色" | ui resize 1200 750 | ui tree |
+#                                              ui scroll x y -3 | ui sscroll x y -3 (Shift held: sideways)
 #   scripts/wsl-dev.sh log [n]                 tail the app log in %LOCALAPPDATA%\Cloudie
 #   scripts/wsl-dev.sh stderr [n]              tail what the app wrote to stderr (crash traces)
 #   scripts/wsl-dev.sh test                    run the Core tests with the Linux SDK (~/.dotnet)
@@ -68,7 +69,7 @@ cmd_ui() {
   case "$action" in
     invoke) args=(-Name "$1") ;;
     click|rclick|dblclick|resize|hover) args=(-X "$1" -Y "$2") ;;
-    scroll|drag) args=(-X "$1" -Y "$2" -Value "$3") ;;
+    scroll|sscroll|drag) args=(-X "$1" -Y "$2" -Value "$3") ;;
     select) args=(-Type "$1" -Index "$2" -Value "$3") ;;
     keys|type) args=(-Keys "$1") ;;
     tree) args=(-Depth "${1:-8}") ;;

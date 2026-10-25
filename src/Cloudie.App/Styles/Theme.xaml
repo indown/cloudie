@@ -23,6 +23,7 @@
             <SolidColorBrush x:Key="CloudieTextPrimaryBrush" Color="#FF1C1C1E" />
             <SolidColorBrush x:Key="CloudieTextSecondaryBrush" Color="#99000000" />
             <SolidColorBrush x:Key="CloudieAccentBrush" Color="#FFC98A2B" />
+            <AcrylicBrush x:Key="CloudieCompactBarBrush" TintColor="#FFF7F7F8" TintOpacity="0.7" FallbackColor="#F2F7F7F8" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Default">
             <Color x:Key="CloudieSurface">#FF121212</Color>
@@ -37,6 +38,7 @@
             <SolidColorBrush x:Key="CloudieTextPrimaryBrush" Color="#FFF5F5F5" />
             <SolidColorBrush x:Key="CloudieTextSecondaryBrush" Color="#99FFFFFF" />
             <SolidColorBrush x:Key="CloudieAccentBrush" Color="#FFE9B872" />
+            <AcrylicBrush x:Key="CloudieCompactBarBrush" TintColor="#FF121212" TintOpacity="0.7" FallbackColor="#F2121212" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
             <SolidColorBrush x:Key="CloudieSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
@@ -45,6 +47,7 @@
             <SolidColorBrush x:Key="CloudieTextPrimaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="CloudieTextSecondaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="CloudieAccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="CloudieCompactBarBrush" Color="{ThemeResource SystemColorWindowColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 

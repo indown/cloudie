@@ -9,11 +9,12 @@
     <!-- The whole page is the list's scroller: the header rides in the list (TrackList.Header), so it scrolls away
          with the first rows and a long list gets the full height. Fixed above the list, it left two visible rows on
          an artist page with its album strip. -->
+    <Grid>
     <controls:TrackList x:Name="List" Padding="32,16,32,0" Rows="{x:Bind ViewModel.Rows, Mode=OneWay}" CanRemove="{x:Bind ViewModel.IsOwnPlaylist, Mode=OneWay}"
                         CanHeartMode="{x:Bind ViewModel.CanHeartMode, Mode=OneWay}" CanLocate="True">
         <controls:TrackList.Header>
             <StackPanel Spacing="16" Margin="0,0,0,16">
-                <Grid ColumnSpacing="24">
+                <Grid x:Name="TitleBlock" ColumnSpacing="24">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -100,4 +101,22 @@
             </StackPanel>
         </controls:TrackList.Header>
     </controls:TrackList>
+
+    <!-- 紧凑栏: once the title block has scrolled out, the name and 播放全部 float over the rows (ShowCompactBar). -->
+    <Grid x:Name="CompactBar" VerticalAlignment="Top" Height="56" Padding="32,0" ColumnSpacing="16" Opacity="0" IsHitTestVisible="False"
+          Background="{ThemeResource CloudieCompactBarBrush}" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="{x:Bind ViewModel.Title, Mode=OneWay}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <Button Grid.Column="1" Command="{x:Bind ViewModel.PlayAllCommand}" Style="{StaticResource AccentButtonStyle}" CornerRadius="16" Padding="14,4"
+                VerticalAlignment="Center" AutomationProperties.Name="播放全部">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <FontIcon Glyph="&#xE768;" FontSize="12" />
+                <TextBlock Text="播放全部" />
+            </StackPanel>
+        </Button>
+    </Grid>
+    </Grid>
 </Page>
