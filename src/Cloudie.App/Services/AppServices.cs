@@ -12,6 +12,8 @@ public sealed class AppServices
     public required AppSettings Settings { get; init; }
     public required NeteaseClient Client { get; init; }
     public required NeteaseApi Api { get; init; }
+    /// <summary>音源账号: the second account that only fetches song URLs; its client is <c>SourceAccount.Api.Client</c>.</summary>
+    public required SourceAccount SourceAccount { get; init; }
     public required UnblockService Unblock { get; init; }
     public required AccountService Account { get; init; }
     public required PlayerService Player { get; init; }
@@ -29,6 +31,11 @@ public sealed class AppServices
         var settings = new AppSettings(new JsonFileSettingsStore(AppPaths.SettingsFile));
         var client = new NeteaseClient(new JsonFileCookieStore(AppPaths.CookiesFile)) { SpoofDomesticIp = settings.SpoofDomesticIp };
         var api = new NeteaseApi(client);
+        // 音源账号 lives in its own cookie file and only ever answers song-URL lookups (see SongUrlResolver).
+        var sourceClient = new NeteaseClient(new JsonFileCookieStore(AppPaths.SourceCookiesFile)) { SpoofDomesticIp = settings.SpoofDomesticIp };
+        var sourceAccount = new SourceAccount(new NeteaseApi(sourceClient), () => settings.SourceAccountEnabled);
+        var songUrls = new SongUrlResolver(api, sourceAccount);
+        songUrls.LookupFailed += (id, viaSource, error) => log.Warn($"song url {id}{(viaSource ? " (音源账号)" : "")}: {error.Message}");
         var sources = new List<IAudioSource>
         {
             new PyncmdAudioSource(),
@@ -36,7 +43,7 @@ public sealed class AppServices
         };
         var unblock = new UnblockService(sources, () => settings.UnblockEnabled ? settings.EnabledSources : new HashSet<string>());
         unblock.SourceFailed += (source, error) => log.Warn($"音源 {source.DisplayName} 失败: {error.Message}");
-        var account = new AccountService(api, log);
+        var account = new AccountService(api, log) { SourceVipType = () => sourceAccount.IsUsable ? sourceAccount.VipType : 0 };
         // A moved cache lives where the user put it, unless that place is gone (unplugged drive, locked volume).
         var cacheDirectory = AppPaths.CacheDirectory;
         string? cacheNotice = null;
@@ -50,12 +57,13 @@ public sealed class AppServices
             }
         }
         var audioCache = new AudioCache(cacheDirectory, () => settings.AudioCacheLimitBytes);
-        var player = new PlayerService(api, unblock, settings, account, log, new PlaybackStore(AppPaths.QueueFile, AppPaths.PositionFile), audioCache);
+        var player = new PlayerService(api, songUrls, unblock, settings, account, log, new PlaybackStore(AppPaths.QueueFile, AppPaths.PositionFile), audioCache);
         return new AppServices
         {
             Settings = settings,
             Client = client,
             Api = api,
+            SourceAccount = sourceAccount,
             Unblock = unblock,
             Account = account,
             Player = player,

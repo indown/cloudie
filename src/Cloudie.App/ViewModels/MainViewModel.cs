@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Cloudie.App.Controls;
 using Cloudie.App.Services;
 using Cloudie.Core.Updates;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Imaging;
 
@@ -35,6 +36,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         RebuildMenu();
         App.Services.Status.Shown += ShowStatus;
+        WatchSourceAccount();
         _account.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(AccountService.Profile) or nameof(AccountService.Playlists)) RebuildMenu();
@@ -48,6 +50,25 @@ public sealed partial class MainViewModel : ObservableObject
                 IsStatusOpen = true;
                 Player.StatusMessage = null;
             }
+        };
+    }
+
+    /// <summary>A song-URL lookup found 音源账号 signed out (301): said once per expiry, from the resolver's thread.</summary>
+    private void WatchSourceAccount()
+    {
+        var dispatcher = DispatcherQueue.GetForCurrentThread();
+        var sourceAccount = App.Services.SourceAccount;
+        var noticed = false;
+        sourceAccount.Changed += () =>
+        {
+            if (!sourceAccount.IsExpired)
+            {
+                noticed = false;
+                return;
+            }
+            if (noticed) return;
+            noticed = true;
+            dispatcher.TryEnqueue(() => ShowStatus("音源账号登录已失效，已改用主账号取流；可在设置中重新扫码"));
         };
     }
 

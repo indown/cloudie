@@ -9,12 +9,26 @@ using Windows.Storage.Streams;
 
 namespace Cloudie.App.ViewModels;
 
-/// <summary>QR-code sign-in: fetch a key, render the code, poll until the phone confirms.</summary>
+/// <summary>
+/// QR-code sign-in: fetch a key, render the code, poll until the phone confirms. Works for the main
+/// account and for 音源账号 alike: the cookies land in whichever client's jar made the requests.
+/// </summary>
 public sealed partial class LoginViewModel : ObservableObject
 {
-    private readonly NeteaseApi _api = App.Services.Api;
-    private readonly AccountService _account = App.Services.Account;
+    private readonly NeteaseApi _api;
+    private readonly Func<Task> _onConfirmed;
+    private readonly string _scanHint;
     private CancellationTokenSource? _cts;
+
+    /// <param name="api">The client whose cookie jar receives the session.</param>
+    /// <param name="onConfirmed">Run after NetEase confirmed the scan, typically a profile reload.</param>
+    /// <param name="scanHint">What to show next to the code, e.g. which account to scan with.</param>
+    public LoginViewModel(NeteaseApi api, Func<Task> onConfirmed, string scanHint)
+    {
+        _api = api;
+        _onConfirmed = onConfirmed;
+        _scanHint = scanHint;
+    }
 
     [ObservableProperty] public partial BitmapImage? QrImage { get; private set; }
     [ObservableProperty] public partial string Status { get; private set; } = "正在生成二维码…";
@@ -28,7 +42,7 @@ public sealed partial class LoginViewModel : ObservableObject
         {
             var key = await _api.GetQrKeyAsync(cts.Token);
             QrImage = await RenderAsync(NeteaseApi.QrLoginUrl(key));
-            Status = "用网易云音乐 App 扫码登录";
+            Status = _scanHint;
             while (!cts.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
@@ -45,7 +59,7 @@ public sealed partial class LoginViewModel : ObservableObject
                         break;
                     case QrLoginState.Confirmed:
                         Status = "登录成功";
-                        await _account.ReloadAsync();
+                        await _onConfirmed();
                         IsDone = true;
                         return;
                 }

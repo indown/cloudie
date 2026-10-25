@@ -11,6 +11,8 @@ public static class AppPaths
 
     public static string SettingsFile => Path.Combine(DataDirectory, "settings.json");
     public static string CookiesFile => Path.Combine(DataDirectory, "cookies.json");
+    /// <summary>音源账号: the second NetEase session, kept apart from the main account's cookies.</summary>
+    public static string SourceCookiesFile => Path.Combine(DataDirectory, "cookies-source.json");
     public static string LogFile => Path.Combine(DataDirectory, "cloudie.log");
     public static string QueueFile => Path.Combine(DataDirectory, "queue.json");
     public static string PositionFile => Path.Combine(DataDirectory, "playback.json");

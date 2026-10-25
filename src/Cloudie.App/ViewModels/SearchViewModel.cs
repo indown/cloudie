@@ -42,7 +42,7 @@ public sealed partial class SearchViewModel : ObservableObject
             var number = 1;
             foreach (var track in _songs)
             {
-                var playability = track.GetPlayability(null, _account.IsLoggedIn, _account.VipType);
+                var playability = track.GetPlayability(null, _account.IsLoggedIn, _account.PlaybackVipType);
                 Songs.Add(new TrackRow(track, playability, number++) { IsLiked = _account.IsLiked(track.Id) });
             }
             Albums.Clear();

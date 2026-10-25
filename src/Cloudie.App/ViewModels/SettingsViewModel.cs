@@ -17,19 +17,28 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly AppSettings _settings = App.Services.Settings;
     private readonly AccountService _account = App.Services.Account;
+    private readonly SourceAccount _sourceAccount = App.Services.SourceAccount;
     private readonly AudioCache _audioCache = App.Services.AudioCache;
     private readonly DispatcherQueue _dispatcher = DispatcherQueue.GetForCurrentThread();
     private readonly Action _cacheChanged;
+    private readonly Action _sourceAccountChanged;
 
     public SettingsViewModel()
     {
         _cacheChanged = () => _dispatcher.TryEnqueue(RefreshCacheUsage);
         _audioCache.Changed += _cacheChanged;
+        // 音源账号 changes on the resolver's thread too (a lookup that got 301).
+        _sourceAccountChanged = () => _dispatcher.TryEnqueue(RefreshSourceAccount);
+        _sourceAccount.Changed += _sourceAccountChanged;
         RefreshCacheUsage();
     }
 
-    /// <summary>The page is leaving: stop listening to the cache.</summary>
-    public void Detach() => _audioCache.Changed -= _cacheChanged;
+    /// <summary>The page is leaving: stop listening to the cache and the source account.</summary>
+    public void Detach()
+    {
+        _audioCache.Changed -= _cacheChanged;
+        _sourceAccount.Changed -= _sourceAccountChanged;
+    }
 
     public IReadOnlyList<QualityOption> Qualities { get; } =
         new[] { AudioQuality.Standard, AudioQuality.ExHigh, AudioQuality.Lossless, AudioQuality.HiRes }
@@ -71,6 +80,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             _settings.SpoofDomesticIp = value;
             App.Services.Client.SpoofDomesticIp = value;
+            App.Services.SourceAccount.Api.Client.SpoofDomesticIp = value;
             OnPropertyChanged();
         }
     }
@@ -212,14 +222,73 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsLoggedIn => _account.IsLoggedIn;
     public string Version => AppInfo.VersionText;
 
+    // MARK: 音源账号
+
+    public bool SourceAccountEnabled
+    {
+        get => _settings.SourceAccountEnabled;
+        set
+        {
+            _settings.SourceAccountEnabled = value;
+            OnPropertyChanged();
+            RefreshSourceAccount();
+        }
+    }
+
+    /// <summary>The card header: the nickname once it is known, otherwise the state.</summary>
+    public string SourceAccountName => _sourceAccount.Profile?.Nickname ?? (_sourceAccount.IsLoggedIn ? "音源账号" : "未登录");
+
+    public string SourceAccountStatus
+    {
+        get
+        {
+            if (!_sourceAccount.IsLoggedIn) return "再登录一个有黑胶 VIP 的账号，播放时用它取官方音源";
+            if (_sourceAccount.IsExpired) return "登录已失效，请重新扫码";
+            if (_sourceAccount.Profile is not { } profile) return "还没读到账号信息，播放时仍会尝试使用";
+            if (profile.UserId == _account.Profile?.UserId) return "与主账号是同一个账号，不会带来更高音质";
+            if (profile.VipType <= 0) return "该账号没有黑胶 VIP，不会带来更高音质";
+            return _settings.SourceAccountEnabled ? "黑胶 VIP · 播放时由它取官方音源" : "黑胶 VIP · 已停用，播放仍用主账号";
+        }
+    }
+
+    /// <summary>扫码登录 is offered until a live session is there; after an expiry it reads 重新登录.</summary>
+    public bool CanSignInSourceAccount => !_sourceAccount.IsLoggedIn || _sourceAccount.IsExpired;
+    public string SourceSignInText => _sourceAccount.IsExpired ? "重新登录" : "扫码登录";
+    public bool IsSourceAccountSignedIn => _sourceAccount.IsLoggedIn;
+
+    public void RefreshSourceAccount()
+    {
+        OnPropertyChanged(nameof(SourceAccountName));
+        OnPropertyChanged(nameof(SourceAccountStatus));
+        OnPropertyChanged(nameof(CanSignInSourceAccount));
+        OnPropertyChanged(nameof(SourceSignInText));
+        OnPropertyChanged(nameof(IsSourceAccountSignedIn));
+    }
+
+    [RelayCommand]
+    private async Task LogoutSourceAccount()
+    {
+        try
+        {
+            await _sourceAccount.LogoutAsync();
+        }
+        catch (Exception error)
+        {
+            App.Services.Log.Warn($"退出音源账号: {error.Message}");
+        }
+        RefreshSourceAccount();
+        App.Services.Status.Show("已退出音源账号");
+    }
+
     [ObservableProperty] public partial string? NavidromeTestResult { get; private set; }
     [ObservableProperty] public partial string? UpdateResult { get; private set; }
 
-    /// <summary>Re-reads the account after the login dialog closes.</summary>
+    /// <summary>Re-reads the account after the login dialog closes; the source-account text compares against it.</summary>
     public void Refresh()
     {
         OnPropertyChanged(nameof(AccountName));
         OnPropertyChanged(nameof(IsLoggedIn));
+        RefreshSourceAccount();
     }
 
     [RelayCommand]

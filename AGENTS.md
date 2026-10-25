@@ -45,6 +45,12 @@ Notes for anyone (human or agent) continuing this code base.
   `AudioFormat` (magic bytes first: CDNs answer `application/octet-stream`); the file is opened with
   `FileShare.Delete` so eviction can remove a song while it plays. Fill happens from `PlayerService.Tick` after
   `AudioCache.ShouldStartCaching`, one download at a time, never on a metered connection or for a trial.
+- 音源账号 (`SourceAccount` + `SongUrlResolver`, Core): a second NetEase session in `cookies-source.json` that
+  only answers `song/enhance/player/url/v1`; playlists, recommendations, likes and scrobbles stay with the main
+  account. The resolver asks it *first* (a non-VIP account answers a lossless request with a quietly downgraded
+  file, not an error, so the VIP account cannot be a fallback), asks the main account first for 云盘 songs, and
+  retires it on 301 until the user scans again. `AccountService.PlaybackVipType` is the higher tier of the two,
+  so VIP-only songs are not marked unplayable in lists.
 - Settings, cookies and the log live in `%LOCALAPPDATA%\Cloudie` (`AppPaths`), not in ApplicationData, so the app
   runs unpackaged; `.github/workflows/build.yml` publishes unpackaged self-contained zips for x64 and ARM64 on every
   push and is the quickest way to compile the WinUI project without a Windows machine.

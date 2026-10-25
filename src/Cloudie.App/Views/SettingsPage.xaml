@@ -20,9 +20,23 @@
                     <Button Content="退出登录" Command="{x:Bind ViewModel.LogoutCommand}" Visibility="{x:Bind ViewModel.IsLoggedIn, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
             </toolkit:SettingsCard>
+            <toolkit:SettingsExpander Header="音源账号" Description="用另一个有黑胶 VIP 的账号取官方音源，歌单、推荐和听歌记录仍用上面的主账号" IsExpanded="True">
+                <toolkit:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE716;" />
+                </toolkit:SettingsExpander.HeaderIcon>
+                <ToggleSwitch IsOn="{x:Bind ViewModel.SourceAccountEnabled, Mode=TwoWay}" OnContent="开" OffContent="关" />
+                <toolkit:SettingsExpander.Items>
+                    <toolkit:SettingsCard Header="{x:Bind ViewModel.SourceAccountName, Mode=OneWay}" Description="{x:Bind ViewModel.SourceAccountStatus, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="{x:Bind ViewModel.SourceSignInText, Mode=OneWay}" Click="SourceLogin_Click" Visibility="{x:Bind ViewModel.CanSignInSourceAccount, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                            <Button Content="退出登录" Command="{x:Bind ViewModel.LogoutSourceAccountCommand}" Visibility="{x:Bind ViewModel.IsSourceAccountSignedIn, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+                </toolkit:SettingsExpander.Items>
+            </toolkit:SettingsExpander>
 
             <TextBlock Text="播放" Style="{StaticResource SectionTitleStyle}" />
-            <toolkit:SettingsCard Header="音质" Description="无损与 Hi-Res 需要黑胶 VIP，未开通时自动回落到可用音质">
+            <toolkit:SettingsCard Header="音质" Description="无损与 Hi-Res 需要黑胶 VIP（主账号或音源账号），未开通时自动回落到可用音质">
                 <toolkit:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE8D6;" />
                 </toolkit:SettingsCard.HeaderIcon>

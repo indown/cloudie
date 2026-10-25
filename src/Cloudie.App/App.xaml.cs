@@ -28,11 +28,25 @@ public partial class App : Application
         Services.Player.RestoreQueue();
         // Started before the window so the home page can wait for it and load signed in the first time.
         _ = Services.Account.RestoreAsync();
+        _ = RestoreSourceAccountAsync();
         MainWindow = new MainWindow();
         MainWindow.ApplyTheme(theme);
         MainWindow.Activate();
         if (Services.AudioCacheNotice is { } notice) Services.Status.Show(notice);
         if (Services.Settings.CheckUpdates) CheckForUpdatesLater(MainWindow);
+    }
+
+    /// <summary>音源账号 is restored alongside; nothing waits for it, since a stored cookie is usable right away.</summary>
+    private static async Task RestoreSourceAccountAsync()
+    {
+        try
+        {
+            await Services.SourceAccount.RestoreAsync();
+        }
+        catch (Exception error)
+        {
+            Services.Log.Warn($"恢复音源账号失败: {error.Message}");
+        }
     }
 
     /// <summary>A few seconds after launch, so the first screen is not competing with a network call.</summary>

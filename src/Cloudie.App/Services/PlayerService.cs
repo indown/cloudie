@@ -16,12 +16,13 @@ namespace Cloudie.App.Services;
 
 /// <summary>
 /// Owns the queue, the MediaPlayer and the system transport controls. Resolves each track's
-/// URL from NetEase first and from the gray-track sources when NetEase refuses or only offers
-/// a trial.
+/// URL from NetEase first (through 音源账号 when one is signed in, see <see cref="SongUrlResolver"/>)
+/// and from the gray-track sources when NetEase refuses or only offers a trial.
 /// </summary>
 public sealed partial class PlayerService : ObservableObject
 {
     private readonly NeteaseApi _api;
+    private readonly SongUrlResolver _songUrls;
     private readonly UnblockService _unblock;
     private readonly AppSettings _settings;
     private readonly AccountService _account;
@@ -86,9 +87,10 @@ public sealed partial class PlayerService : ObservableObject
         public bool IsStale => DateTimeOffset.UtcNow - StartedAt > ResolvedMedia.Lifetime;
     }
 
-    public PlayerService(NeteaseApi api, UnblockService unblock, AppSettings settings, AccountService account, LogService log, PlaybackStore store, AudioCache audioCache)
+    public PlayerService(NeteaseApi api, SongUrlResolver songUrls, UnblockService unblock, AppSettings settings, AccountService account, LogService log, PlaybackStore store, AudioCache audioCache)
     {
         _api = api;
+        _songUrls = songUrls;
         _store = store;
         _audioCache = audioCache;
         _unblock = unblock;
@@ -339,7 +341,7 @@ public sealed partial class PlayerService : ObservableObject
             var how = local is not null ? " [缓存]"
                 : prefetched is not null ? (_currentWasPreopened ? " [预热: 链接+流]" : " [预热: 链接]")
                 : _currentMediaReused ? " [链接复用]" : "";
-            _log.Info($"now playing {track.Id} {track.Name} via {UnblockSource ?? "netease"} ({ServedQuality}){how}");
+            _log.Info($"now playing {track.Id} {track.Name} via {UnblockSource ?? Via(resolved)} ({ServedQuality}){how}");
             _ = LoadLyricsAsync(track, generation, cts.Token);
             if ((IsFm || IsHeartMode) && Queue.CurrentIndex >= Queue.Count - 1) _ = TopUpAsync();
             PrefetchNext();
@@ -454,34 +456,35 @@ public sealed partial class PlayerService : ObservableObject
         return media;
     }
 
-    /// <summary>NetEase first, in the chosen quality; refusals and trials fall through to the gray-track sources.</summary>
+    /// <summary>
+    /// NetEase first, in the chosen quality, through whichever account <see cref="SongUrlResolver"/> picks;
+    /// refusals and trials fall through to the gray-track sources.
+    /// </summary>
     private async Task<ResolvedMedia?> ResolveFreshAsync(Track track, CancellationToken ct)
     {
         var quality = _settings.AudioQuality;
-        SongUrlData? data = null;
-        try
+        var lookup = await _songUrls.ResolveAsync(track, quality, ct);
+        if (lookup is { Data.IsTrial: false })
         {
-            data = await _api.GetSongUrlAsync(track.Id, quality, ct);
-        }
-        catch (NeteaseApiException error)
-        {
-            _log.Warn($"song url {track.Id}: {error.Message}");
-        }
-        if (data?.Url is { Length: > 0 } url && !data.IsTrial)
-        {
-            return new ResolvedMedia(track.Id, new Uri(url.Replace("http://", "https://")), null, data.Level, quality, DateTimeOffset.UtcNow);
+            return new ResolvedMedia(track.Id, new Uri(lookup.Data.Url!.Replace("http://", "https://")), null, lookup.Data.Level, quality,
+                DateTimeOffset.UtcNow, ViaSourceAccount: lookup.ViaSourceAccount);
         }
         if (!_settings.UnblockEnabled) return null;
         var resolved = await _unblock.ResolveAsync(UnblockTrack.From(track), quality, ct);
         if (resolved is null)
         {
             // A 30-second trial is still better than nothing.
-            return data?.Url is { Length: > 0 } trial
-                ? new ResolvedMedia(track.Id, new Uri(trial.Replace("http://", "https://")), null, "试听", quality, DateTimeOffset.UtcNow, IsTrial: true)
+            return lookup is { } trial
+                ? new ResolvedMedia(track.Id, new Uri(trial.Data.Url!.Replace("http://", "https://")), null, "试听", quality,
+                    DateTimeOffset.UtcNow, IsTrial: true, ViaSourceAccount: trial.ViaSourceAccount)
                 : null;
         }
         return new ResolvedMedia(track.Id, resolved.Url, resolved.SourceName, resolved.Format, quality, DateTimeOffset.UtcNow);
     }
+
+    /// <summary>For the log: the gray-track source, or which NetEase account the link came from.</summary>
+    private static string Via(ResolvedMedia? media) =>
+        media?.SourceName ?? (media is { ViaSourceAccount: true } ? "netease/音源账号" : "netease");
 
     // MARK: 歌曲缓存
 
@@ -578,7 +581,7 @@ public sealed partial class PlayerService : ObservableObject
                 media = await ResolveAsync(track, ct);
             }
             if (media is null) _log.Warn($"prefetch {track.Id} {track.Name}: no source");
-            else _log.Info($"prefetched {track.Id} {track.Name} via {media.SourceName ?? "netease"} ({media.Quality})");
+            else _log.Info($"prefetched {track.Id} {track.Name} via {Via(media)} ({media.Quality})");
             return media;
         }
         catch (OperationCanceledException)

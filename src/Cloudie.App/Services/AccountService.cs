@@ -15,6 +15,10 @@ public sealed partial class AccountService(NeteaseApi api, LogService log) : Obs
 
     public bool IsLoggedIn => Profile is not null;
     public int VipType => Profile?.VipType ?? 0;
+    /// <summary>VIP tier of 音源账号 while it is usable; wired by <see cref="AppServices"/>.</summary>
+    public Func<int>? SourceVipType { get; init; }
+    /// <summary>The tier that decides what plays: the higher of this account and 音源账号.</summary>
+    public int PlaybackVipType => Math.Max(VipType, SourceVipType?.Invoke() ?? 0);
     public PlaylistSummary? Favorites => Playlists.FirstOrDefault(static p => p.IsFavorites);
 
     public event EventHandler? LikedSongsChanged;

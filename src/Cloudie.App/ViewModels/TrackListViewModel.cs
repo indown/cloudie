@@ -219,7 +219,7 @@ public sealed partial class TrackListViewModel : ObservableObject
         var number = 1;
         foreach (var track in tracks)
         {
-            var playability = track.GetPlayability(byId.GetValueOrDefault(track.Id), _account.IsLoggedIn, _account.VipType);
+            var playability = track.GetPlayability(byId.GetValueOrDefault(track.Id), _account.IsLoggedIn, _account.PlaybackVipType);
             Rows.Add(new TrackRow(track, playability, number++) { IsLiked = _account.IsLiked(track.Id) });
         }
         var total = TimeSpan.FromMilliseconds(tracks.Sum(static t => (double)t.DurationMs));

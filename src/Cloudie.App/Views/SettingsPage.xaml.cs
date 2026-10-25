@@ -20,4 +20,12 @@ public sealed partial class SettingsPage : Page
         await dialog.ShowAsync();
         ViewModel.Refresh();
     }
+
+    private async void SourceLogin_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = LoginDialog.ForSourceAccount();
+        dialog.XamlRoot = XamlRoot;
+        await dialog.ShowAsync();
+        ViewModel.RefreshSourceAccount();
+    }
 }
