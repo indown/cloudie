@@ -49,7 +49,9 @@ public sealed class NeteaseClient : IDisposable
             {
                 UseCookies = false,
                 AutomaticDecompression = DecompressionMethods.All,
-                PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                // Dropped before NetEase's own idle limit closes it from the far side.
+                PooledConnectionIdleTimeout = TimeSpan.FromSeconds(20)
             };
             _ownsHttp = true;
         }
@@ -151,7 +153,33 @@ public sealed class NeteaseClient : IDisposable
                ?? throw new NeteaseApiException(-1, "数据加载失败");
     }
 
+    /// <summary>How long to wait before the one retry of a request whose connection died before answering.</summary>
+    public static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(300);
+
     private async Task<string> PostAsync(string url, IReadOnlyDictionary<string, string> form,
+        IReadOnlyDictionary<string, string>? cookieOverrides, bool absorbCookies, CancellationToken cancellationToken)
+    {
+        // NetEase closes idle keep-alive connections without notice; the next request on one fails with
+        // "response ended prematurely" before a byte came back. Such a request is sent once more on a fresh
+        // connection, like a browser would. Anything that reached the server (a status code) is never repeated.
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await PostOnceAsync(url, form, cookieOverrides, absorbCookies, cancellationToken).ConfigureAwait(false);
+            }
+            catch (HttpRequestException error) when (attempt == 0 && IsDeadConnection(error))
+            {
+                await Task.Delay(RetryDelay, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private static bool IsDeadConnection(HttpRequestException error) =>
+        error.HttpRequestError is HttpRequestError.ResponseEnded or HttpRequestError.ConnectionError
+        || error.InnerException is HttpIOException { HttpRequestError: HttpRequestError.ResponseEnded or HttpRequestError.ConnectionError };
+
+    private async Task<string> PostOnceAsync(string url, IReadOnlyDictionary<string, string> form,
         IReadOnlyDictionary<string, string>? cookieOverrides, bool absorbCookies, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, url);

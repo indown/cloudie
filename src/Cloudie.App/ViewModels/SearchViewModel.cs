@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Cloudie.App.Services;
 using Cloudie.Core.Netease;
 using Cloudie.Core.Netease.Models;
@@ -62,4 +63,8 @@ public sealed partial class SearchViewModel : ObservableObject
     }
 
     public Task PlayAsync(TrackRow row) => _player.PlayAsync(_songs, _songs.FindIndex(t => t.Id == row.Track.Id));
+
+    /// <summary>The "重试" button of the error bar: the same search again.</summary>
+    [RelayCommand]
+    private Task Retry() => Query.Length == 0 ? Task.CompletedTask : SearchAsync(Query);
 }

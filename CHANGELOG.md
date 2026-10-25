@@ -78,6 +78,13 @@
   scrolling placeholders are off, the row context menu is one shared MenuFlyout instead of nine items plus
   icons built for every realised row, cover BitmapImages are cached by URL so recycled rows do not decode the
   same cover again, and the locate button's scroll check no longer scans every row.
+- App: the 重试 button on a list page's error bar did nothing: the bar shared a grid cell with the (empty)
+  song list, which lay on top of it and took the clicks. The bar now has its own row; the search page gets
+  the same button.
+- Core: NetEase drops idle keep-alive connections without notice, and the next request on one failed with
+  "the response ended prematurely" (seen on the daily, album and artist pages). `NeteaseClient` now sends a
+  request whose connection died before any byte came back once more on a fresh connection, and pooled
+  connections idle for 20 s are discarded first; anything that reached the server is never repeated.
 - App: Media Foundation reports one playback failure several times; each report skipped a song, so one bad
   stream threw away the next three as well. A failure is now handled once per loaded source (and never
   attributed to the source that replaced it), is logged with its error kind and HRESULT, is never scrobbled,

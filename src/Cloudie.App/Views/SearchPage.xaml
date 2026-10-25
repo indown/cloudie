@@ -12,7 +12,11 @@
                 <Run Text="搜索" /><Run Text="“" /><Run Text="{x:Bind ViewModel.Query, Mode=OneWay}" /><Run Text="”" />
             </TextBlock>
             <ProgressBar IsIndeterminate="True" Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
-            <InfoBar Severity="Error" IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}" Message="{x:Bind ViewModel.Error, Mode=OneWay}" />
+            <InfoBar Severity="Error" IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}" Message="{x:Bind ViewModel.Error, Mode=OneWay}" IsClosable="False">
+                <InfoBar.ActionButton>
+                    <Button Content="重试" Command="{x:Bind ViewModel.RetryCommand}" />
+                </InfoBar.ActionButton>
+            </InfoBar>
 
             <TextBlock Text="歌手" Style="{StaticResource SectionTitleStyle}" Visibility="{x:Bind HasArtists, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
             <GridView ItemsSource="{x:Bind ViewModel.Artists, Mode=OneWay}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="Artist_ItemClick"

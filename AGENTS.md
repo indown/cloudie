@@ -17,7 +17,9 @@ Notes for anyone (human or agent) continuing this code base.
   `/tmp/cloudie-shots/<name>.png`, `ui invoke|click|keys|type|tree` drives it through UI Automation (icon buttons
   carry `AutomationProperties.Name`, so `ui invoke "下一首"` works), `log` tails the app log, `test` runs the Core
   tests with the Linux SDK in `~/.dotnet`. `run` kills a running Cloudie first, so the developer's own instance
-  goes down with it.
+  goes down with it. Environment variables only reach the Windows process through `WSLENV`; to make every
+  NetEase call fail (error bars, retry buttons): `WSLENV=HTTPS_PROXY:HTTP_PROXY HTTPS_PROXY=http://127.0.0.1:9
+  HTTP_PROXY=http://127.0.0.1:9 scripts/wsl-dev.sh run`.
 - Design reference: Kumone (https://github.com/missuo/kumone, LGPL-3.0). Feature scope and visual style follow it, but
   no code is copied from it: Cloudie is MIT, so keep it that way — reimplement from the NetEase API behaviour, never port.
 

@@ -85,16 +85,23 @@
             </GridView>
         </StackPanel>
 
-        <Grid Grid.Row="2">
-            <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" Width="40" Height="40" VerticalAlignment="Top" Margin="0,40,0,0" />
+        <Grid Grid.Row="2" RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <!-- Its own row: laid over the list it was unreachable, the empty ListView took the clicks on 重试. -->
             <InfoBar Severity="Error" IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
-                     Message="{x:Bind ViewModel.Error, Mode=OneWay}" VerticalAlignment="Top" IsClosable="False">
+                     Message="{x:Bind ViewModel.Error, Mode=OneWay}" IsClosable="False">
                 <InfoBar.ActionButton>
                     <Button Content="重试" Command="{x:Bind ViewModel.RetryCommand}" />
                 </InfoBar.ActionButton>
             </InfoBar>
-            <controls:TrackList x:Name="List" Rows="{x:Bind ViewModel.Rows, Mode=OneWay}" CanRemove="{x:Bind ViewModel.IsOwnPlaylist, Mode=OneWay}"
-                                CanHeartMode="{x:Bind ViewModel.CanHeartMode, Mode=OneWay}" CanLocate="True" />
+            <Grid Grid.Row="1">
+                <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" Width="40" Height="40" VerticalAlignment="Top" Margin="0,40,0,0" />
+                <controls:TrackList x:Name="List" Rows="{x:Bind ViewModel.Rows, Mode=OneWay}" CanRemove="{x:Bind ViewModel.IsOwnPlaylist, Mode=OneWay}"
+                                    CanHeartMode="{x:Bind ViewModel.CanHeartMode, Mode=OneWay}" CanLocate="True" />
+            </Grid>
         </Grid>
     </Grid>
 </Page>

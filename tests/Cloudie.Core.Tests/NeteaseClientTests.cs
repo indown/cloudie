@@ -33,6 +33,44 @@ public class NeteaseClientTests
     }
 
     [Fact]
+    public async Task A_request_whose_connection_died_before_answering_is_sent_once_more()
+    {
+        var calls = 0;
+        var handler = new StubHandler(_ => ++calls == 1
+            ? throw new HttpRequestException(HttpRequestError.ResponseEnded, "The response ended prematurely.")
+            : Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"code":200}""") }));
+        using var client = new NeteaseClient(handler: handler);
+
+        var json = await client.WeapiAsync("/v1/album/1");
+
+        Assert.Contains("200", json);
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Other_failures_and_second_deaths_are_not_retried()
+    {
+        var dead = new StubHandler(_ => throw new HttpRequestException(HttpRequestError.ConnectionError, "reset"));
+        using (var client = new NeteaseClient(handler: dead))
+        {
+            await Assert.ThrowsAsync<HttpRequestException>(() => client.WeapiAsync("/v1/album/1"));
+            Assert.Equal(2, dead.Requests.Count);   // one retry, then the error surfaces
+        }
+        var refused = new StubHandler(_ => throw new HttpRequestException(HttpRequestError.NameResolutionError, "no such host"));
+        using (var client = new NeteaseClient(handler: refused))
+        {
+            await Assert.ThrowsAsync<HttpRequestException>(() => client.WeapiAsync("/v1/album/1"));
+            Assert.Single(refused.Requests);
+        }
+        var serverError = StubHandler.Json("""{"code":500}""", HttpStatusCode.BadGateway);
+        using (var client = new NeteaseClient(handler: serverError))
+        {
+            await Assert.ThrowsAsync<NeteaseApiException>(() => client.WeapiAsync("/v1/album/1"));
+            Assert.Single(serverError.Requests);
+        }
+    }
+
+    [Fact]
     public async Task Overseas_header_is_omitted_when_the_spoof_is_off()
     {
         var handler = StubHandler.Json("""{"code":200}""");
