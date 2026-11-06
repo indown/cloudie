@@ -46,9 +46,15 @@
   network round trip. The entry follows shuffle / 下一首播放 / FM refills, is dropped when the quality setting
   changes or after ten minutes, and a pre-opened stream that fails gets one cold retry. Core gains
   `PlaybackQueue.PeekNext` and `ResolvedMedia`; 68 unit tests.
+- App/Core: several Navidrome servers. Settings keeps a list under the Navidrome switch (name, address, user name,
+  password, own switch; 测试 / 编辑 / 上移 / 删除 per row, an add/edit dialog with 测试连接), asked in list order
+  after pyncmd; the player bar, the cache and the log name the server a song came from ("Navidrome · 家里"). The
+  single server of earlier versions is carried over; 133 unit tests.
 
 ### Fixed
 
+- App: 测试连接 for a Navidrome server asks `search3` instead of `ping.view`; a reverse proxy that only passes the
+  calls a player makes answered 403 to the test while playback worked.
 - Core: NetEase answers `personalized/playlist` with `"playCount": 1.2345678E7`; every `int`/`long` field now
   accepts floats, strings and booleans instead of failing the whole response.
 - App: switching the theme (or the audio quality) in Settings re-entered the two-way bound setter until the stack

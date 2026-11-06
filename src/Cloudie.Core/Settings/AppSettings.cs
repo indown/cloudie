@@ -18,6 +18,9 @@ public sealed class AppSettings(ISettingsStore store)
         public const string SpoofDomesticIp = "network.spoofDomesticIp";
         public const string UnblockEnabled = "unblock.enabled";
         public const string EnabledSources = "unblock.sources";
+        /// <summary>The Navidrome servers as one JSON list (<see cref="SubsonicServer"/>), in the order they are asked.</summary>
+        public const string SubsonicServers = "unblock.navidrome.servers";
+        /// <summary>Single-server keys of earlier versions: read as one entry until the list is first saved, then cleared.</summary>
         public const string SubsonicUrl = "unblock.navidrome.url";
         public const string SubsonicUser = "unblock.navidrome.user";
         public const string SubsonicPassword = "unblock.navidrome.password";
@@ -138,23 +141,51 @@ public sealed class AppSettings(ISettingsStore store)
         EnabledSources = set;
     }
 
-    public string? SubsonicUrl
+    /// <summary>
+    /// Navidrome servers in the order they are asked. Earlier versions kept a single server in three keys; those
+    /// read as one entry (<see cref="SubsonicServer.LegacyId"/>) until the list is saved, which also clears them.
+    /// </summary>
+    public IReadOnlyList<SubsonicServer> SubsonicServers
     {
-        get => Store.GetString(Keys.SubsonicUrl);
-        set => Store.SetString(Keys.SubsonicUrl, string.IsNullOrWhiteSpace(value) ? null : value.Trim());
+        get
+        {
+            if (Store.GetString(Keys.SubsonicServers) is { } json) return SubsonicServer.ParseList(json);
+            var url = Store.GetString(Keys.SubsonicUrl);
+            if (string.IsNullOrWhiteSpace(url)) return [];
+            return [new SubsonicServer(SubsonicServer.LegacyId, "", url.Trim(), Store.GetString(Keys.SubsonicUser) ?? "", Store.GetString(Keys.SubsonicPassword) ?? "")];
+        }
+        set
+        {
+            Store.SetString(Keys.SubsonicServers, SubsonicServer.ToJson(value));
+            Store.SetString(Keys.SubsonicUrl, null);
+            Store.SetString(Keys.SubsonicUser, null);
+            Store.SetString(Keys.SubsonicPassword, null);
+        }
     }
 
-    public string? SubsonicUser
+    /// <summary>Adds the server, or replaces the one with the same id where it stands.</summary>
+    public void SaveSubsonicServer(SubsonicServer server)
     {
-        get => Store.GetString(Keys.SubsonicUser);
-        set => Store.SetString(Keys.SubsonicUser, string.IsNullOrWhiteSpace(value) ? null : value.Trim());
+        var servers = SubsonicServers.ToList();
+        var index = servers.FindIndex(s => s.Id == server.Id);
+        if (index < 0) servers.Add(server);
+        else servers[index] = server;
+        SubsonicServers = servers;
     }
 
-    public string? SubsonicPassword
-    {
-        get => Store.GetString(Keys.SubsonicPassword);
-        set => Store.SetString(Keys.SubsonicPassword, string.IsNullOrEmpty(value) ? null : value);
-    }
+    public void RemoveSubsonicServer(string id) => SubsonicServers = SubsonicServers.Where(s => s.Id != id).ToList();
 
-    public SubsonicConfiguration? SubsonicConfiguration => SubsonicConfiguration.TryCreate(SubsonicUrl, SubsonicUser, SubsonicPassword);
+    /// <summary>Moves the server by <paramref name="delta"/> places in the ask order (negative is earlier), stopping at the ends.</summary>
+    public void MoveSubsonicServer(string id, int delta)
+    {
+        var servers = SubsonicServers.ToList();
+        var index = servers.FindIndex(s => s.Id == id);
+        if (index < 0) return;
+        var target = Math.Clamp(index + delta, 0, servers.Count - 1);
+        if (target == index) return;
+        var server = servers[index];
+        servers.RemoveAt(index);
+        servers.Insert(target, server);
+        SubsonicServers = servers;
+    }
 }

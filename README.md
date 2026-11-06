@@ -13,9 +13,9 @@
 - 播放队列、随机 / 循环、系统媒体控制（SMTC）
 - 逐行同步歌词（解析 yrc 逐字时间轴，供后续卡拉 OK 高亮）、翻译
 - 沉浸播放页：封面取色渐变背景，封面在左、歌词在右
-- 灰色歌曲解锁：pyncmd（网易原始文件）+ Navidrome / Subsonic 自建曲库，歌名精确匹配并以歌手或时长校验
+- 灰色歌曲解锁：pyncmd（网易原始文件）+ 多个 Navidrome / Subsonic 自建曲库（按列表顺序逐台查找），歌名精确匹配并以歌手或时长校验
 - 海外解锁：向网易接口附带国内 `X-Real-IP`，海外账号可直接播放锁区歌曲
-- 设置：音质、主题、解锁开关与音源、Navidrome 账号、歌曲缓存
+- 设置：音质、主题、解锁开关与音源、Navidrome 服务器列表、歌曲缓存
 - 听歌记录同步：播放结束后上报网易云（可关），计入听歌排行并影响每日推荐
 - 标题栏搜索联想；头像菜单扫码登录 / 退出；歌手页专辑列表，歌曲右键"查看歌手 / 查看专辑"
 - 快捷键：空格 播放/暂停，Ctrl+← / Ctrl+→ 上一首/下一首，Ctrl+L 歌词页，Ctrl+F 搜索，Esc 收起歌词页
@@ -69,7 +69,7 @@ GitHub Actions 会在每次推送后编译 x64 与 ARM64 的 zip（Actions 页�
 | `playback.audioQuality` | 请求音质：Standard / ExHigh / Lossless / HiRes |
 | `network.spoofDomesticIp` | 海外解锁，默认开 |
 | `unblock.enabled` / `unblock.sources` | 灰歌解锁总开关与启用的音源（`pyncmd,navidrome`） |
-| `unblock.navidrome.url` / `user` / `password` | Navidrome 服务器 |
+| `unblock.navidrome.servers` | Navidrome 服务器列表（JSON：id、名称、地址、用户名、密码、是否启用，按询问顺序）；旧版的 `unblock.navidrome.url` / `user` / `password` 在列表首次保存时并入 |
 | `playback.scrobble` | 同步听歌记录，默认开 |
 | `app.checkUpdates` | 启动时检查更新，默认开 |
 | `window.placement` | 上次的窗口位置、大小和是否最大化（JSON） |

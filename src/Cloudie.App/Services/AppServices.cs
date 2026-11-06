@@ -41,12 +41,13 @@ public sealed class AppServices
         var sourceAccount = new SourceAccount(new NeteaseApi(sourceClient), () => settings.SourceAccountEnabled);
         var songUrls = new SongUrlResolver(api, sourceAccount);
         songUrls.LookupFailed += (id, viaSource, error) => log.Warn($"song url {id}{(viaSource ? " (音源账号)" : "")}: {error.Message}");
-        var sources = new List<IAudioSource>
-        {
-            new PyncmdAudioSource(),
-            new SubsonicAudioSource(() => settings.SubsonicConfiguration)
-        };
-        var unblock = new UnblockService(sources, () => settings.UnblockEnabled ? settings.EnabledSources : new HashSet<string>());
+        // The Navidrome sources are rebuilt from the settings for every lookup, so a server added in Settings counts
+        // at once; they share one client, in list order after pyncmd.
+        var pyncmd = new PyncmdAudioSource();
+        var subsonicHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var unblock = new UnblockService(
+            () => [pyncmd, .. settings.SubsonicServers.Where(static s => s.Enabled).Select(s => new SubsonicAudioSource(s, subsonicHttp))],
+            () => settings.UnblockEnabled ? settings.EnabledSources : new HashSet<string>());
         unblock.SourceFailed += (source, error) => log.Warn($"音源 {source.DisplayName} 失败: {error.Message}");
         var lists = new TrackListCache(AppPaths.ListsDirectory);
         var account = new AccountService(api, log, lists) { SourceVipType = () => sourceAccount.IsUsable ? sourceAccount.VipType : 0 };

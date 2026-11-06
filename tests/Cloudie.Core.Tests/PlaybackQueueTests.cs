@@ -2,6 +2,7 @@ using Cloudie.Core.Netease.Models;
 using Cloudie.Core.Netease;
 using Cloudie.Core.Playback;
 using Cloudie.Core.Settings;
+using Cloudie.Core.Unblock;
 
 namespace Cloudie.Core.Tests;
 
@@ -99,14 +100,12 @@ public class PlaybackQueueTests
         Assert.Equal(Cloudie.Core.Netease.AudioQuality.ExHigh, settings.AudioQuality);
         settings.AudioQuality = Cloudie.Core.Netease.AudioQuality.Lossless;
         settings.SetSourceEnabled("pyncmd", false);
-        settings.SubsonicUrl = " https://music.example.com ";
-        settings.SubsonicUser = "alice";
-        settings.SubsonicPassword = "pw";
+        settings.SaveSubsonicServer(new SubsonicServer("home", "", " https://music.example.com ", "alice", "pw"));
         settings.Volume = 1.7;
         Assert.Equal(Cloudie.Core.Netease.AudioQuality.Lossless, settings.AudioQuality);
         Assert.False(settings.IsSourceEnabled("pyncmd"));
         Assert.True(settings.IsSourceEnabled("navidrome"));
-        Assert.NotNull(settings.SubsonicConfiguration);
+        Assert.NotNull(Assert.Single(settings.SubsonicServers).Configuration);
         Assert.Equal(1, settings.Volume);
     }
 }

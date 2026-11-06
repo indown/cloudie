@@ -35,19 +35,27 @@ public sealed record SubsonicConfiguration(Uri BaseUrl, string User, string Pass
     }
 }
 
-/// <summary>Resolves gray tracks from a personal Navidrome / Subsonic library.</summary>
-public sealed class SubsonicAudioSource(Func<SubsonicConfiguration?> configuration, HttpClient? http = null) : IAudioSource
+/// <summary>
+/// Resolves gray tracks from one Navidrome / Subsonic library. The app makes one of these per configured server,
+/// all sharing an <see cref="HttpClient"/>, so the servers are asked in the order the listener put them.
+/// </summary>
+public sealed class SubsonicAudioSource(SubsonicServer server, HttpClient? http = null) : IAudioSource
 {
     public const string SourceId = "navidrome";
 
     private readonly HttpClient _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
 
+    public SubsonicServer Server { get; } = server;
+
+    /// <summary>Every server answers to the one Navidrome switch in settings.</summary>
     public string Id => SourceId;
-    public string DisplayName => "Navidrome";
+
+    /// <summary>"Navidrome · 家里": the player bar, the cache and the log name the server, not just the kind.</summary>
+    public string DisplayName => $"Navidrome · {Server.DisplayName}";
 
     public async Task<ResolvedAudio?> ResolveAsync(UnblockTrack track, AudioQuality quality, CancellationToken cancellationToken = default)
     {
-        var config = configuration();
+        var config = Server.Configuration;
         if (config is null) return null;
 
         var artist = track.Artists.FirstOrDefault() ?? string.Empty;
@@ -60,14 +68,10 @@ public sealed class SubsonicAudioSource(Func<SubsonicConfiguration?> configurati
             {
                 ["query"] = query, ["songCount"] = "20", ["artistCount"] = "0", ["albumCount"] = "0"
             });
-            using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            var envelope = await JsonSerializer.DeserializeAsync<SubsonicEnvelope>(stream, SubsonicJson, cancellationToken).ConfigureAwait(false);
-            var body = envelope?.Response ?? throw new InvalidOperationException("Navidrome returned no subsonic-response.");
+            var body = await CallAsync(url, cancellationToken).ConfigureAwait(false);
             if (body.Status != "ok")
             {
-                throw new InvalidOperationException($"Navidrome rejected the search: {body.Error?.Message ?? body.Status}");
+                throw new InvalidOperationException($"the server rejected the search: {body.Error?.Message ?? body.Status}");
             }
             var songs = body.SearchResult3?.Song ?? [];
             var candidates = songs.Select(static s => new MatchCandidate(s.Id, s.Title, s.Artist, s.Duration, s.Suffix, s.BitRate));
@@ -80,6 +84,32 @@ public sealed class SubsonicAudioSource(Func<SubsonicConfiguration?> configurati
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// 测试连接: null when the server accepted the credentials, otherwise what it answered (a wrong password is
+    /// an answer, not a failure); a server that cannot be reached throws. It is a one-song search rather than
+    /// ping.view: a reverse proxy that only passes what a player needs answers 403 to ping while lookups work,
+    /// and the search is the call the lookups make.
+    /// </summary>
+    public async Task<string?> ProbeAsync(CancellationToken cancellationToken = default)
+    {
+        var config = Server.Configuration ?? throw new InvalidOperationException("the server entry is incomplete");
+        var url = config.Endpoint("search3.view", new Dictionary<string, string>
+        {
+            ["query"] = "a", ["songCount"] = "1", ["artistCount"] = "0", ["albumCount"] = "0"
+        });
+        var body = await CallAsync(url, cancellationToken).ConfigureAwait(false);
+        return body.Status == "ok" ? null : body.Error?.Message ?? body.Status;
+    }
+
+    private async Task<SubsonicResponse> CallAsync(Uri url, CancellationToken cancellationToken)
+    {
+        using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var envelope = await JsonSerializer.DeserializeAsync<SubsonicEnvelope>(stream, SubsonicJson, cancellationToken).ConfigureAwait(false);
+        return envelope?.Response ?? throw new InvalidOperationException("no subsonic-response in the reply");
     }
 
     private static readonly JsonSerializerOptions SubsonicJson = new() { PropertyNameCaseInsensitive = true, NumberHandling = JsonNumberHandling.AllowReadingFromString };

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Cloudie.App.Services;
@@ -30,6 +31,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         // 音源账号 changes on the resolver's thread too (a lookup that got 301).
         _sourceAccountChanged = () => _dispatcher.TryEnqueue(RefreshSourceAccount);
         _sourceAccount.Changed += _sourceAccountChanged;
+        foreach (var server in _settings.SubsonicServers) SubsonicServers.Add(new SubsonicServerViewModel(this, server));
+        RefreshServerRows();
         RefreshCacheUsage();
     }
 
@@ -115,25 +118,38 @@ public sealed partial class SettingsViewModel : ObservableObject
         set { _settings.SetSourceEnabled(SubsonicAudioSource.SourceId, value); OnPropertyChanged(); }
     }
 
-    public string NavidromeUrl
+    /// <summary>The Navidrome servers in ask order. The settings are written here; the rows only show them.</summary>
+    public ObservableCollection<SubsonicServerViewModel> SubsonicServers { get; } = [];
+
+    /// <summary>A server from the dialog, or a row whose switch flipped: stored, and its row updated or added.</summary>
+    public void SaveServer(SubsonicServer server)
     {
-        get => _settings.SubsonicUrl ?? string.Empty;
-        set { _settings.SubsonicUrl = value; OnPropertyChanged(); OnPropertyChanged(nameof(NavidromeStatus)); }
+        _settings.SaveSubsonicServer(server);
+        if (SubsonicServers.FirstOrDefault(row => row.Id == server.Id) is { } existing) existing.Show(server);
+        else SubsonicServers.Add(new SubsonicServerViewModel(this, server));
+        RefreshServerRows();
     }
 
-    public string NavidromeUser
+    public void RemoveServer(SubsonicServerViewModel row)
     {
-        get => _settings.SubsonicUser ?? string.Empty;
-        set { _settings.SubsonicUser = value; OnPropertyChanged(); OnPropertyChanged(nameof(NavidromeStatus)); }
+        _settings.RemoveSubsonicServer(row.Id);
+        SubsonicServers.Remove(row);
+        RefreshServerRows();
     }
 
-    public string NavidromePassword
+    public void MoveServerUp(SubsonicServerViewModel row)
     {
-        get => _settings.SubsonicPassword ?? string.Empty;
-        set { _settings.SubsonicPassword = value; OnPropertyChanged(); OnPropertyChanged(nameof(NavidromeStatus)); }
+        var index = SubsonicServers.IndexOf(row);
+        if (index <= 0) return;
+        _settings.MoveSubsonicServer(row.Id, -1);
+        SubsonicServers.Move(index, index - 1);
+        RefreshServerRows();
     }
 
-    public string NavidromeStatus => _settings.SubsonicConfiguration is null ? "未配置：填写地址、用户名和密码" : "已配置";
+    private void RefreshServerRows()
+    {
+        foreach (var row in SubsonicServers) row.RefreshPosition();
+    }
 
     // MARK: 歌曲缓存
 
@@ -280,7 +296,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         App.Services.Status.Show("已退出音源账号");
     }
 
-    [ObservableProperty] public partial string? NavidromeTestResult { get; private set; }
     [ObservableProperty] public partial string? UpdateResult { get; private set; }
 
     /// <summary>Re-reads the account after the login dialog closes; the source-account text compares against it.</summary>
@@ -289,27 +304,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(AccountName));
         OnPropertyChanged(nameof(IsLoggedIn));
         RefreshSourceAccount();
-    }
-
-    [RelayCommand]
-    private async Task TestNavidrome()
-    {
-        var config = _settings.SubsonicConfiguration;
-        if (config is null)
-        {
-            NavidromeTestResult = "请先填写完整";
-            return;
-        }
-        try
-        {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-            var response = await http.GetStringAsync(config.Endpoint("ping.view"));
-            NavidromeTestResult = response.Contains("\"status\":\"ok\"") ? "连接成功" : "服务器拒绝：" + response[..Math.Min(120, response.Length)];
-        }
-        catch (Exception error)
-        {
-            NavidromeTestResult = "连接失败：" + error.Message;
-        }
     }
 
     [RelayCommand]

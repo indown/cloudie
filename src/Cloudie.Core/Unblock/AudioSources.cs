@@ -15,8 +15,9 @@ public sealed record ResolvedAudio(string SourceId, string SourceName, Uri Url, 
 
 public interface IAudioSource
 {
-    /// <summary>Stable identifier used in settings, e.g. <c>navidrome</c>.</summary>
+    /// <summary>Stable identifier used in settings, e.g. <c>navidrome</c>; every Navidrome server shares it.</summary>
     string Id { get; }
+    /// <summary>What the listener sees as the origin of a song; names the server when there are several.</summary>
     string DisplayName { get; }
     /// <summary>Finds the track in this source; null when it is not there, an exception when the source failed.</summary>
     Task<ResolvedAudio?> ResolveAsync(UnblockTrack track, AudioQuality quality, CancellationToken cancellationToken = default);

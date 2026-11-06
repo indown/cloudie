@@ -72,21 +72,30 @@
                     <toolkit:SettingsCard Header="pyncmd" Description="网易原始文件，适合只是锁区的歌">
                         <ToggleSwitch IsOn="{x:Bind ViewModel.IsPyncmdEnabled, Mode=TwoWay}" OnContent="开" OffContent="关" />
                     </toolkit:SettingsCard>
-                    <toolkit:SettingsCard Header="Navidrome" Description="自己的 Navidrome 或任何兼容 Subsonic API 的服务器，按歌名加歌手或时长严格匹配">
-                        <ToggleSwitch IsOn="{x:Bind ViewModel.IsNavidromeEnabled, Mode=TwoWay}" OnContent="开" OffContent="关" />
-                    </toolkit:SettingsCard>
-                    <toolkit:SettingsCard Header="Navidrome 服务器" Description="{x:Bind ViewModel.NavidromeStatus, Mode=OneWay}">
-                        <StackPanel Spacing="8" MinWidth="320">
-                            <TextBox PlaceholderText="https://music.example.com" Header="地址" Text="{x:Bind ViewModel.NavidromeUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBox Header="用户名" Text="{x:Bind ViewModel.NavidromeUser, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <PasswordBox Header="密码" Password="{x:Bind ViewModel.NavidromePassword, Mode=TwoWay}" />
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <Button Content="测试连接" Command="{x:Bind ViewModel.TestNavidromeCommand}" />
-                                <TextBlock Text="{x:Bind ViewModel.NavidromeTestResult, Mode=OneWay}" VerticalAlignment="Center" Style="{StaticResource SecondaryTextStyle}" />
-                            </StackPanel>
-                        </StackPanel>
-                    </toolkit:SettingsCard>
                 </toolkit:SettingsExpander.Items>
+            </toolkit:SettingsExpander>
+            <toolkit:SettingsExpander Header="Navidrome" Description="自己的 Navidrome 或任何兼容 Subsonic API 的服务器，按列表顺序逐台查找，歌名加歌手或时长严格匹配" IsExpanded="True"
+                                      ItemsSource="{x:Bind ViewModel.SubsonicServers}">
+                <toolkit:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE8F1;" />
+                </toolkit:SettingsExpander.HeaderIcon>
+                <ToggleSwitch IsOn="{x:Bind ViewModel.IsNavidromeEnabled, Mode=TwoWay}" OnContent="开" OffContent="关" />
+                <toolkit:SettingsExpander.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SubsonicServerViewModel">
+                        <toolkit:SettingsCard Header="{x:Bind Title, Mode=OneWay}" Description="{x:Bind Detail, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ToggleSwitch IsOn="{x:Bind Enabled, Mode=TwoWay}" OnContent="开" OffContent="关" />
+                                <Button Content="测试" Command="{x:Bind TestCommand}" />
+                                <Button Content="编辑" Click="EditServer_Click" Tag="{x:Bind Server, Mode=OneWay}" />
+                                <Button Content="上移" Command="{x:Bind MoveUpCommand}" IsEnabled="{x:Bind CanMoveUp, Mode=OneWay}" />
+                                <Button Content="删除" Command="{x:Bind RemoveCommand}" />
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                    </DataTemplate>
+                </toolkit:SettingsExpander.ItemTemplate>
+                <toolkit:SettingsExpander.ItemsFooter>
+                    <toolkit:SettingsCard Header="添加服务器" Description="填写地址、用户名和密码，可先测试连接再保存" IsClickEnabled="True" Click="AddServer_Click" />
+                </toolkit:SettingsExpander.ItemsFooter>
             </toolkit:SettingsExpander>
 
             <TextBlock Text="歌曲缓存" Style="{StaticResource SectionTitleStyle}" />

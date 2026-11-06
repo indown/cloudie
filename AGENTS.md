@@ -31,7 +31,15 @@ Notes for anyone (human or agent) continuing this code base.
   `music.163.com`. `X-Real-IP: 118.88.88.88` is added when `AppSettings.SpoofDomesticIp` is on (default).
 - Gray tracks: `PlayerService.ResolveAsync` asks NetEase first; a missing URL or a trial falls through to
   `UnblockService` (pyncmd → Navidrome). The Navidrome matcher requires an exact normalized title plus artist or
-  duration confirmation; never "first result".
+  duration confirmation; never "first result". There can be several Navidrome servers: `AppSettings.SubsonicServers`
+  is one JSON list (`SubsonicServer`, key `unblock.navidrome.servers`; the three single-server keys of earlier
+  versions read as one entry until the list is first saved), `UnblockService` takes a source *provider*, and
+  `AppServices` rebuilds one `SubsonicAudioSource` per enabled server on every lookup, in list order after pyncmd,
+  all sharing one `HttpClient`. Every server shares the source id `navidrome` (the one switch in `unblock.sources`)
+  and is told apart by `DisplayName` ("Navidrome · 家里"), which is what the player bar shows, the cache stores and
+  the log prints. Settings adds / edits servers through `SubsonicServerDialog`; `SubsonicAudioSource.ProbeAsync` is 测试连接, a one-song
+  `search3` rather than `ping.view`, because one reverse proxy seen in the wild answers 403 to ping (and getLicense)
+  while the search and stream calls work.
 - Some Subsonic-compatible proxies hang on suffix Range requests (`bytes=-N`); Windows Media Foundation uses
   explicit ranges, but keep this in mind if playback from a Navidrome source stalls.
 - WinUI compile gotchas met so far: `x:DataType` cannot name a nested type; a `Window` cannot use a converter inside

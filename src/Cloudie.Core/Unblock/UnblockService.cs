@@ -3,9 +3,10 @@ using Cloudie.Core.Netease;
 namespace Cloudie.Core.Unblock;
 
 /// <summary>Resolves gray tracks from the enabled third-party sources, in order, first hit wins.</summary>
-public sealed class UnblockService(IReadOnlyList<IAudioSource> sources, Func<IReadOnlySet<string>> enabledSourceIds)
+public sealed class UnblockService(Func<IReadOnlyList<IAudioSource>> sources, Func<IReadOnlySet<string>> enabledSourceIds)
 {
-    public IReadOnlyList<IAudioSource> Sources { get; } = sources;
+    /// <summary>The sources as configured right now: the Navidrome entries come and go with the settings.</summary>
+    public IReadOnlyList<IAudioSource> Sources => sources();
 
     /// <summary>Raised for every source that failed (not for sources that simply had no match).</summary>
     public event Action<IAudioSource, Exception>? SourceFailed;
